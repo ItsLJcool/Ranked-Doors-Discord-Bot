@@ -48,7 +48,7 @@ class Pages {
         });
     }
 
-    reply(interaction) { interaction.reply({embeds: [this.pages_embeds[this.curPage]], components: [this.page_buttons.ActionRow]}); }
+    reply(interaction) { interaction.reply({ephemeral: this.isEphemeral, embeds: [this.pages_embeds[this.curPage]], components: [this.page_buttons.ActionRow]}); }
 }
 
 class PagesEmbedData {

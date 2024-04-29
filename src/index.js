@@ -133,9 +133,7 @@ client.on(Events.ClientReady, async (x) => {
         const newPage = new Pages(interaction, "test-page", [
             new PagesEmbedData({name: `${interaction.member.user.globalName} - Page 1`}, "Page 1 - Test", "This is to display how pages work!", null, null, null, true),
             new PagesEmbedData({name: `${interaction.member.user.globalName} - Page 2`}, "Another Page Title!", "Wow! No way! Custom pages!!", null, null, null, true),
-        ], false, (id, buttonInteraction) => {
-            
-        });
+        ], false);
         newPage.reply(interaction);
     });
 });

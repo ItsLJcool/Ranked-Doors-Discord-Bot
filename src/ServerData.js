@@ -14,6 +14,7 @@ class ServerData {
     static init() {
         this.isInit = false;
         this.server_info = new ServerSaveData();
+        this.OpenedSettings = [];
         const dir = path.join(__dirname, 'ServerData');
         fs.readdir(dir, (err, files) => {
             if (err) {
@@ -27,7 +28,7 @@ class ServerData {
                 return;
             }
             const fileData = fs.readFileSync(save, 'utf8');
-            this.server_info = JSON.parse(fileData);
+            this.server_info.setup(JSON.parse(fileData));
             this.isInit = true;
         });
 
@@ -49,6 +50,10 @@ class ServerData {
                 subcommand
                     .setName('view')
                     .setDescription('View all the settings currently set in the server')
+                    .addBooleanOption(option =>
+                        option.setName('hidden')
+                            .setDescription('Hides the message to only you can see it')
+                    )
             );
             const json = this.server_info;
             Object.keys(this.server_info).forEach((key, value) => {
@@ -61,26 +66,38 @@ class ServerData {
             });
         },
         async (interaction) => {
-            const server = this.server_info;
-            Object.keys(server).forEach((key, value) => {
+            let hide = (interaction.options.getBoolean("hidden") != undefined) ? interaction.options.getBoolean("hidden") : false;
+            for (let i=0; i < this.OpenedSettings.length; i++) {
+                if (this.OpenedSettings[i].member.user.id !== interaction.member.user.id) continue;
+                this.OpenedSettings[i].deleteReply();
+                if (interaction.options._hoistedOptions[0].name !== "view") hide = (this.OpenedSettings[i].options.getBoolean("hidden") != undefined) ? this.OpenedSettings[i].options.getBoolean("hidden") : hide;
+                this.OpenedSettings.splice(i, 1);
+                break;
+            }
+            this.OpenedSettings.push(interaction);
+
+            Object.keys(this.server_info).forEach((key, value) => {
                 if (key.toLowerCase() !== interaction.options.getSubcommand()) return;
-                console.log((OptionResolve.resolve(interaction.options._hoistedOptions[0].name, interaction)));
-                server[key].subcmd.onValueChange(OptionResolve.resolve(interaction.options._hoistedOptions[0].name, interaction));
+                this.server_info[key].subcmd.onValueChange(OptionResolve.resolve(interaction.options._hoistedOptions[0].name, interaction));
             });
-            const pageFields = server.toPageFields();
-            console.log("line 71", pageFields);
+
+            const pageFields = this.server_info.toPageFields();
             let pagesData = [];
             for (let i=0; i < pages.length; i++) {
                 if (pageFields[i] == undefined) continue;
                 const pageData = pages[i];
                 pagesData.push(new PagesEmbedData({name: pageData.author.name.replace("{globalName}", interaction.member.user.globalName)}, pageData.title,  pageData.desc, null, pageFields[i], null, true));
             }
-            const settingPage = new Pages(interaction, "settings-page", pagesData, false, (id, buttonInteraction) => {
-                
-            });
+
+            const settingPage = new Pages(interaction, "settings-page", pagesData, hide);
             settingPage.reply(interaction);
+            if (interaction.options._hoistedOptions[0] != undefined) {
+                if (interaction.options._hoistedOptions[0].name !== "view") this.SaveServerData();
+            }
         });
     }
+
+    OpenedSettings = [];
 
     static async SaveServerData() {
         const json = this.server_info.toJson();
@@ -107,7 +124,7 @@ class ServerData {
 
 class OptionResolve {
     static resolve(name, interaction) {
-        console.log(interaction);
+        // console.log(interaction);
         switch(name.toLowerCase()) {
             case "channel":
             case "category":
@@ -209,8 +226,8 @@ class ServerSaveData {
      * Time until users who haven't submitted their screenshots will be considered a loss, and will still lose Elo
      */
     MatchReview_TimeOut = {
-        value: "24",
-        default: "24",
+        value: 24,
+        default: 24,
         inline: true,
         page: 1,
         subcmd: { // items in a cmd is always required to set the value to
@@ -222,14 +239,17 @@ class ServerSaveData {
                         .setRequired(true)
                 );
             },
-            onValueChange: (value) => { this.MatchReview_TimeOut = value; },
+            onValueChange: (value) => { this.MatchReview_TimeOut.value = value; },
         },
     };
 
     constructor() { return this; }
 
-    toJson() { 
-        return JSON.parse(JSON.stringify(this));
+    toJson() {
+        let json = JSON.parse(JSON.stringify(this));
+        
+        Object.keys(json).forEach((key, value) => { delete json[key].subcmd; });
+        return json;
     }
 
     toPageFields() {
@@ -243,10 +263,18 @@ class ServerSaveData {
                 name: key,
                 value: `Setting Value: ${settinVal} | Default: ${defaultVal}`,
                 inline: json[key].inline,
-                subcmd: json[key].subcmd,
+                page:  json[key].page,
             });
         });
         return selectionData;
+    }
+
+    setup(json) {
+        Object.keys(json).forEach((key, value) => {
+            this[key].value = json[key].value;
+            this[key].default = json[key].default;
+            this[key].inline = json[key].inline;
+        });
     }
 }
 

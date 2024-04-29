@@ -41,7 +41,7 @@ class PlayersManager {
         if (isNaN(discordID) || isNaN(robloxID)) return [false, null];
         for (let i=0; i < this.cached_PlayerInformation.length; i++) {
             const player = this.cached_PlayerInformation[i];
-            console.log(player);
+            
             if (player.RobloxID === robloxID || player.DiscordID === discordID) return [false, null];
         }
         let newPlayer = new PlayerData();
@@ -83,7 +83,7 @@ class PlayersManager {
     static GetPlayerData(discordID) {
         for (let i=0; i < this.cached_PlayerInformation.length; i++) {
             const player = this.cached_PlayerInformation[i];
-            console.log(player.DiscordID, discordID);
+            
             if (player.DiscordID == discordID) return player;
         }
         return -1;
@@ -128,7 +128,6 @@ class PlayerData {
     Deaths = 0; // How many times player has died in Matches
 
     AddMatchData(data) {
-        console.log(typeof MatchesData);
         MatchesData.push(data);
     }
 
