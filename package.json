@@ -1,0 +1,16 @@
+{
+  "name": "ranked-doors",
+  "version": "1.0.0",
+  "description": "A Discord bot used in the Ranked Doors server.",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "ItsLJcool",
+  "license": "ISC",
+  "keywords": [],
+  "dependencies": {
+    "discord.js": "^14.12.1",
+    "dotenv": "^16.4.5"
+  }
+}
