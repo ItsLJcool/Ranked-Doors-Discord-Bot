@@ -240,6 +240,65 @@ class RankedMatches {
                 })
                 .catch(console.error);
         });
+
+        EventsHelper.addCommand("submit", "Submit Files to the moderators to review and validate matches", (command) => {
+            command.addIntegerOption(option => 
+                option.setName("match-id").setDescription("The Match ID you are submiting for.").setRequired(true)
+            ).addAttachmentOption(option =>
+                option.setName("pre-run").setDescription("The Screenshot of the Pre-run shop.").setRequired(true)
+            ).addAttachmentOption(option =>
+                option.setName("death").setDescription("The Screenshot of your death, or win screen.").setRequired(true)
+            ).addAttachmentOption(option =>
+                option.setName("players").setDescription("The Screenshot of all the players in the game.").setRequired(true)
+            ).setDMPermission(true);
+        }, async (interaction) => {
+            const matchInput = interaction.options.getInteger("match-id");
+            const files = [interaction.options.getAttachment("pre-run"), interaction.options.getAttachment("death"), interaction.options.getAttachment("players")];
+
+            const player_data = PlayersManager.GetPlayerData(interaction.member.user.id);
+            let hasMatchID = false;
+            for (let i=0; i < player_data.MatchData.length; i++) {
+                if (player_data.MatchData[i].MatchID != matchInput) continue;
+                hasMatchID = true;
+                break;
+            }
+
+            if (!hasMatchID) {
+                interaction.reply({ content: "You have not played this match!\n Please provide a Match you have played!", ephemeral: true });
+                return;
+            }
+
+            let fields = [
+                {
+                  name: "Pre-Run Shop Attachment",
+                  value: "This is what the reviewers will see when looking for Pre-Run Shop Attachment",
+                  inline: false
+                },
+                {
+                  name: "Overview Screen Attachment",
+                  value: "This is what the reviewers will see when looking for Overview Attachment",
+                  inline: false
+                },,
+                {
+                  name: "Player List Screen Attachment",
+                  value: "This is what the reviewers will see when looking for Player List Attachment",
+                  inline: false
+                },
+            ];
+            console.log(files);
+            let embeds = [];
+            for (let i=0; i < files.length; i++) {
+                const embedData = new EmbedBuilder()
+                .setTitle(`Match #${matchInput} - Submition Confromation`)
+                .setDescription("Please make sure the images are correct before submiting the data!")
+                .addFields(fields[i])
+                .setImage(files[i])
+                .setColor("#00b0f4");
+                embeds.push(embedData);
+            }
+
+          await interaction.reply({ embeds: embedData });
+        });
     }
 
     static OnMatchEnd(player, ongoingMatch) {
@@ -247,7 +306,7 @@ class RankedMatches {
 
         const matchID = ongoingMatch.MatchInfo.MatchID;
 
-        const fileSubmitCMDname = "/placeholder command !!";
+        const fileSubmitCMDname = "/submit";
         const forgorCMDname = "/placeholder command !!";
 
         const playerData = PlayersManager.GetPlayerData(player.user.id);
