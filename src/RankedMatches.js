@@ -212,7 +212,7 @@ class RankedMatches {
                 buttonInteraction.reply({content: "Uh Oh, something bad happened... This got past a switch case...", ephemeral: true});
             });
             message.edit({components: [button.ActionRow]});
-            interaction.guild.channels.create({userLimit: 12, parent: ServerData.server_info.VC_CategoryID,
+            interaction.guild.channels.create({userLimit: 12, parent: ServerData.server_info.VC_CategoryID.value,
                 name: `${match.ModeInfo.Mode} (${match.ModeInfo.RunType})`, type: ChannelType.GuildVoice, reason: `New Rank Match Setup - ${match.ModeInfo.Mode} (${match.ModeInfo.RunType})` })
                 .then(channel => {
                     let ongoingMatch = new OngoingMatchData();
@@ -252,15 +252,22 @@ class RankedMatches {
                 option.setName("players").setDescription("The Screenshot of all the players in the game.").setRequired(true)
             ).setDMPermission(true);
         }, async (interaction) => {
+            const _user = (interaction.member == undefined) ? interaction.user : interaction.member.user;
             const matchInput = interaction.options.getInteger("match-id");
             const files = [interaction.options.getAttachment("pre-run"), interaction.options.getAttachment("death"), interaction.options.getAttachment("players")];
 
-            const player_data = PlayersManager.GetPlayerData(interaction.member.user.id);
+            const player_data = PlayersManager.GetPlayerData(_user.id);
+            if (player_data == -1) {
+                interaction.reply({ content: "You need to make an account to be able to submit matches!\nPlease use `/register` with your Roblox ID to make an account!", ephemeral: true });
+                return;
+            }
             let hasMatchID = false;
-            for (let i=0; i < player_data.MatchData.length; i++) {
-                if (player_data.MatchData[i].MatchID != matchInput) continue;
-                hasMatchID = true;
-                break;
+            if (player_data.MatchesData != undefined) {
+                for (let i=0; i < player_data.MatchesData.length; i++) {
+                    if (player_data.MatchesData[i].MatchID != matchInput) continue;
+                    hasMatchID = true;
+                    break;
+                }
             }
 
             if (!hasMatchID) {
@@ -278,31 +285,32 @@ class RankedMatches {
                   name: "Overview Screen Attachment",
                   value: "This is what the reviewers will see when looking for Overview Attachment",
                   inline: false
-                },,
+                },
                 {
                   name: "Player List Screen Attachment",
                   value: "This is what the reviewers will see when looking for Player List Attachment",
                   inline: false
                 },
             ];
-            console.log(files);
+            
             let embeds = [];
             for (let i=0; i < files.length; i++) {
                 const embedData = new EmbedBuilder()
                 .setTitle(`Match #${matchInput} - Submition Confromation`)
                 .setDescription("Please make sure the images are correct before submiting the data!")
                 .addFields(fields[i])
-                .setImage(files[i])
+                .setImage(files[i].attachment)
                 .setColor("#00b0f4");
                 embeds.push(embedData);
             }
 
-          await interaction.reply({ embeds: embedData });
+          await interaction.reply({ embeds: embeds })
+          .catch(console.error);
         });
     }
 
     static OnMatchEnd(player, ongoingMatch) {
-        player.voice.setChannel("1234247883209965659"); // QUEUE CHANNEL ID
+        player.voice.setChannel(ServerData.server_info.QueueVC_ID); // QUEUE CHANNEL ID
 
         const matchID = ongoingMatch.MatchInfo.MatchID;
 
