@@ -240,7 +240,10 @@ class RankedMatches {
                 })
                 .catch(console.error);
         });
-
+        
+        /**
+         * Issue with this, It doesn't send the message in the guild, so we would have to manage what server the command was sent in.
+         */
         EventsHelper.addCommand("submit", "Submit Files to the moderators to review and validate matches", (command) => {
             command.addIntegerOption(option => 
                 option.setName("match-id").setDescription("The Match ID you are submiting for.").setRequired(true)
@@ -303,14 +306,24 @@ class RankedMatches {
                 .setColor("#00b0f4");
                 embeds.push(embedData);
             }
+            
+        
+            const button = new Button(_user.id, [
+                new ButtonItems("submit", "Submit Screenshots", ButtonStyle.Primary, null, null, false)
+            ], (id, interaction) => {
+                interaction.reply("Code to send to admins is not here, but it should send it when this message appears");
+                /*
+                
+                */
+            });
 
-          await interaction.reply({ embeds: embeds })
+          await interaction.reply({ embeds: embeds, components: [button.ActionRow] })
           .catch(console.error);
         });
     }
 
     static OnMatchEnd(player, ongoingMatch) {
-        player.voice.setChannel(ServerData.server_info.QueueVC_ID); // QUEUE CHANNEL ID
+        player.voice.setChannel(ServerData.server_info.QueueVC_ID.value); // QUEUE CHANNEL ID
 
         const matchID = ongoingMatch.MatchInfo.MatchID;
 
