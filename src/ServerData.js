@@ -32,7 +32,7 @@ class ServerData {
             this.isInit = true;
         });
 
-        const ljYapps = "You can use the subcommands to set the settings directly";
+        const ljYapps = "You can use the subcommands to set the settings directly. Example: `/settings reviewchannelid";
         const pages = [
             {
                 author: { name: `{globalName} - VC Settings` },

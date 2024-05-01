@@ -241,7 +241,10 @@ class RankedMatches {
                 })
                 .catch(console.error);
         });
-
+        
+        /**
+         * Issue with this, It doesn't send the message in the guild, so we would have to manage what server the command was sent in.
+         */
         EventsHelper.addCommand("submit", "Submit Files to the moderators to review and validate matches", (command) => {
             command.addIntegerOption(option => 
                 option.setName("match-id").setDescription("The Match ID you are submiting for.").setRequired(true)
