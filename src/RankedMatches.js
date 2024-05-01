@@ -11,6 +11,7 @@ const {ServerData, ServerSaveData} = require("./ServerData");
 const {Selection, SelectionItems} = require("./MessagesUtil/Selection");
 
 const {Button, ButtonItems} = require("./MessagesUtil/Button");
+const {Pages, PagesEmbedData} = require("./MessagesUtil/Pages");
 
 class RankedMatches {
 
@@ -39,6 +40,7 @@ class RankedMatches {
 
     static init() {
         this.ModifiersText = new ModifiersTypes().toSelectionItems();
+        this.MatchesToBeReviewed = new Map();
         fs.readdir(this.matchDir, (err, files) => {
             if (err) {
                 console.error('Error reading folder:', err);
@@ -165,7 +167,6 @@ class RankedMatches {
                     return;
                 }
 
-                console.log(_userId[0]);
                 switch(_userId[0].toLowerCase()) {
                     case "start match":
                         for (let i=0; i < this.CurrentMatches.length; i++) {
@@ -195,16 +196,16 @@ class RankedMatches {
                         for (let i=0; i < this.CurrentMatches.length; i++) {
                             const matchThingy = this.CurrentMatches[i];
                             if (matchThingy.createdUserID != buttonInteraction.member.user.id) continue;
-                            matchThingy.channel.permissionOverwrites.set([
-                                {
-                                    id: matchThingy.channel.guild.id,
-                                    allow: [PermissionFlagsBits.Connect],
-                                }
-                            ]);
                             EventsHelper.removeVC_Callback(matchThingy.channel.id);
-                            await EventsHelper.addVC_Callback(matchThingy.channel.id, (oldState, newState, type) => { if (matchThingy.channel.members.size <= 0) matchThingy.channel.delete(); });
-                            matchThingy.ongoingMatch.Players.forEach((player) => this.OnMatchEnd(player, matchThingy.ongoingMatch.clone()));
-                            this.CurrentMatches.splice(i, 1);
+                            await EventsHelper.addVC_Callback(matchThingy.channel.id, (oldState, newState, type) => {
+                                if (matchThingy.channel.members.size <= 0) {
+                                    EventsHelper.removeVC_Callback(matchThingy.channel.id);
+                                    matchThingy.channel.delete();
+                                }
+                            });
+                            await matchThingy.ongoingMatch.Players.forEach(async (player) => this.OnMatchEnd(player, matchThingy));
+                            await this.CurrentMatches.splice(i, 1);
+                            message.delete();
                             return;
                         }
                         break;
@@ -219,7 +220,7 @@ class RankedMatches {
                     ongoingMatch.Channel = channel;
                     ongoingMatch.MatchInfo = match;
                     ongoingMatch.Players = [];
-                    this.CurrentMatches.push({createdUserID: interaction.member.user.id, channel: channel, ongoingMatch: ongoingMatch});
+                    this.CurrentMatches.push({matchCommandChannel: interaction.channel, createdUserID: interaction.member.user.id, channel: channel, ongoingMatch: ongoingMatch});
                     EventsHelper.addVC_Callback(channel.id, (oldState, newState, type) => {
                         let isInArray = false;
                         for (let i=0; i < ongoingMatch.Players.length; i++) {
@@ -250,15 +251,18 @@ class RankedMatches {
                 option.setName("death").setDescription("The Screenshot of your death, or win screen.").setRequired(true)
             ).addAttachmentOption(option =>
                 option.setName("players").setDescription("The Screenshot of all the players in the game.").setRequired(true)
-            ).setDMPermission(true);
+            );
         }, async (interaction) => {
+
+            await interaction.deferReply();
+
             const _user = (interaction.member == undefined) ? interaction.user : interaction.member.user;
             const matchInput = interaction.options.getInteger("match-id");
             const files = [interaction.options.getAttachment("pre-run"), interaction.options.getAttachment("death"), interaction.options.getAttachment("players")];
 
             const player_data = PlayersManager.GetPlayerData(_user.id);
             if (player_data == -1) {
-                interaction.reply({ content: "You need to make an account to be able to submit matches!\nPlease use `/register` with your Roblox ID to make an account!", ephemeral: true });
+                interaction.editReply({ content: "You need to make an account to be able to submit matches!\nPlease use `/register` with your Roblox ID to make an account!", ephemeral: true });
                 return;
             }
             let hasMatchID = false;
@@ -293,29 +297,32 @@ class RankedMatches {
                 },
             ];
             
-            let embeds = [];
+            let pagesData = [];
             for (let i=0; i < files.length; i++) {
-                const embedData = new EmbedBuilder()
-                .setTitle(`Match #${matchInput} - Submition Confromation`)
-                .setDescription("Please make sure the images are correct before submiting the data!")
-                .addFields(fields[i])
-                .setImage(files[i].attachment)
-                .setColor("#00b0f4");
-                embeds.push(embedData);
+                pagesData.push(new PagesEmbedData(null,
+                `Match #${matchInput} - Submition Confromation`,
+                "Please make sure the images are correct before submiting the data!", "#00b0f4", fields[i], null, true));
             }
 
-          await interaction.reply({ embeds: embeds })
-          .catch(console.error);
+            let embedPage = new Pages(interaction, "submition", pagesData, false);
+            for (let i=0; i < embedPage.pages_embeds.length; i++) embedPage.pages_embeds[i].setImage(files[i].attachment);
+            await interaction.editReply({ephemeral: embedPage.isEphemeral, embeds: [embedPage.pages_embeds[embedPage.curPage]], components: [embedPage.page_buttons.ActionRow]});
+            
+            const button = new Button(interaction.user.id, [
+                new ButtonItems("final-submit", "Submit Information", ButtonStyle.Primary, null, null, false)
+            ], (id, buttonInteraction) => {
+                buttonInteraction.reply("Sent Data to the moderators!");
+            });
+            console.log(interaction);
+            interaction.followUp({content: "Once you have verified the data, please click the submit button. Otherwise use the `/submit` command again!", components: [button.ActionRow]});
         });
     }
 
-    static OnMatchEnd(player, ongoingMatch) {
-        player.voice.setChannel(ServerData.server_info.QueueVC_ID); // QUEUE CHANNEL ID
-
-        const matchID = ongoingMatch.MatchInfo.MatchID;
-
-        const fileSubmitCMDname = "/submit";
-        const forgorCMDname = "/placeholder command !!";
+    static async OnMatchEnd(player, matchThingy) {
+        player.voice.setChannel(ServerData.server_info.QueueVC_ID.value); // QUEUE CHANNEL ID
+        if (ServerData.server_info.QueueVC_ID.value == undefined || ServerData.server_info.QueueVC_ID.value == "" || ServerData.server_info.QueueVC_ID.value == " ") {
+            player.voice.disconnect();
+        }
 
         const playerData = PlayersManager.GetPlayerData(player.user.id);
         if (playerData === -1) {
@@ -323,6 +330,12 @@ class RankedMatches {
             // SEND DATA TO MODS SAYING THIS USER SHOULD BE CROSSED OFF FROM THE LIST, AND THEY ARE NOT ELEGABLE FOR THE MATCH DATA!!
             return;
         }
+
+        const fileSubmitCMDname = "/submit";
+        const forgorCMDname = "/placeholder command !!";
+
+        let ongoingMatch = matchThingy.ongoingMatch.clone();
+        const matchID = ongoingMatch.MatchInfo.MatchID;
         
         let fieldString = "";
         for (let i=0; i < ongoingMatch.Players.length; i++) { fieldString += `${ongoingMatch.Players[i].user.globalName}\n`; }
@@ -363,8 +376,16 @@ class RankedMatches {
         .setTimestamp();
 
         PlayersManager.AddNewPlayerMatch(player.user.id, ongoingMatch.MatchInfo);
-
-        player.send({embeds: [embed]});
+        // player.send({embeds: [embed]});
+                            
+        const newThread = await matchThingy.matchCommandChannel.threads.create({
+            name: `${player.user.globalName} - ${ongoingMatch.MatchInfo.ModeInfo.Mode} (${ongoingMatch.MatchInfo.ModeInfo.RunType})`,
+            autoArchiveDuration: 1440,
+            type: ChannelType.PrivateThread,
+            reason: `Ranked Match ${ongoingMatch.MatchInfo.ModeInfo.Mode} (${ongoingMatch.MatchInfo.ModeInfo.RunType}) - Completed | Needs Submission By User and Review`,
+        });
+        newThread.members.add(player.user.id);
+        newThread.send({embeds: [embed]});
     }
 
     static matchDir = path.join(__dirname, 'MatchesData');

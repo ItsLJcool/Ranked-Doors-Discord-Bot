@@ -26,7 +26,7 @@ class EventsHelper {
         this.voiceChannelCallbacks = new Map();
 
         this.client.on(Events.InteractionCreate, (interaction) => {
-            
+            // this.client.application.commands.set([]);
             // console.log(ServerData.isInit);
 
             if (interaction.isModalSubmit()) {
