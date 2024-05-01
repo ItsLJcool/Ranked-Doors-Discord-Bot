@@ -33,7 +33,7 @@ client.on(Events.ClientReady, async (x) => {
     EventsHelper.init(client);
     PlayersManager.init();
 
-    RankedMatches.init();
+    RankedMatches.init(client);
 
     ServerData.init();
 

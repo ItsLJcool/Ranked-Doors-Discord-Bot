@@ -17,6 +17,8 @@ class RankedMatches {
 
     static ranked_matches = 0;
 
+    static client = null;
+
     static PossibleRankedModes = [
         { name: 'Normal', value: 'Normal' },
         { name: 'SUPER HARD MODE', value: 'Hard' },
@@ -38,9 +40,11 @@ class RankedMatches {
         for (let i=0; i < arry.length; i++) option.addChoices(arry[i]);
     }
 
-    static init() {
+    static init(_client) {
+        this.client = _client;
         this.ModifiersText = new ModifiersTypes().toSelectionItems();
         this.MatchesToBeReviewed = new Map();
+
         fs.readdir(this.matchDir, (err, files) => {
             if (err) {
                 console.error('Error reading folder:', err);
@@ -256,7 +260,6 @@ class RankedMatches {
                 option.setName("players").setDescription("The Screenshot of all the players in the game.").setRequired(true)
             );
         }, async (interaction) => {
-
             await interaction.deferReply();
 
             const _user = (interaction.member == undefined) ? interaction.user : interaction.member.user;
@@ -313,10 +316,15 @@ class RankedMatches {
             
             const button = new Button(interaction.user.id, [
                 new ButtonItems("final-submit", "Submit Information", ButtonStyle.Primary, null, null, false)
-            ], (id, buttonInteraction) => {
-                buttonInteraction.reply("Sent Data to the moderators!");
+            ], async (id, buttonInteraction) => {
+                if (ServerData.server_info.ReviewChannelID.value == undefined || ServerData.server_info.ReviewChannelID.value == "" || ServerData.server_info.ReviewChannelID.value == " ") {
+                    buttonInteraction.reply(`Uh oh! Please Ping a Moderator and let them know they haven't properly set-up a channel for reviewing!`);
+                    return;
+                }
+                await buttonInteraction.reply(`Sent Data to the moderators!`);
+                let review_channel = await this.client.channels.fetch(ServerData.server_info.ReviewChannelID.value);
+                review_channel.send("Yipee! Data send here");
             });
-            console.log(interaction);
             interaction.followUp({content: "Once you have verified the data, please click the submit button. Otherwise use the `/submit` command again!", components: [button.ActionRow]});
         });
     }
@@ -418,7 +426,20 @@ class RankedMatches {
     }
 
     static async GetAllMatches() {
-
+        let jsonFiles = [];
+        await fs.readdir(this.matchDir, async (err, files) => {
+            if (err) {
+                console.error('Error reading folder:', err);
+                return;
+            }
+            jsonFiles = files.filter((file) => {
+                const filePath = path.join(dir, file);
+                const fileStat = fs.statSync(filePath);
+                return fileStat.isFile() && path.extname(filePath).toLowerCase() === '.json';
+            });
+            console.log("Finished Getting Files");
+        });
+        console.log(jsonFiles);
     }
     
 

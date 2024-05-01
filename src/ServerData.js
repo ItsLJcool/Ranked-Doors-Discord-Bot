@@ -271,6 +271,7 @@ class ServerSaveData {
 
     setup(json) {
         Object.keys(json).forEach((key, value) => {
+            if (this[key] == undefined) return;
             this[key].value = json[key].value;
             this[key].default = json[key].default;
             this[key].inline = json[key].inline;
