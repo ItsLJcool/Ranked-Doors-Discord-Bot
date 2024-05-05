@@ -57,6 +57,38 @@ class RankedMatches {
             });
             this.ranked_matches = jsonFiles.length;
         });
+
+        EventsHelper.addCommand("verify", "(ROLE SPECIFIC) | Verify Match Data", (command) => {
+            command.addSubcommand(subcommand =>
+                subcommand.setName('user').setDescription("Verify a User's Specific MatchData")
+                    .addIntegerOption(option =>
+                        option.setName("match-id").setDescription("The Match ID you are going to verify").setRequired(true)
+                    ).addUserOption(option =>
+                        option.setName("user").setDescription("The User's data to verify").setRequired(true)
+                    )
+            ).addSubcommand(subcommand =>
+                subcommand.setName('match').setDescription("Verify a Match's Data")
+                    .addIntegerOption(option =>
+                        option.setName("match-id").setDescription("The Match ID you are going to verify").setRequired(true)
+                    )
+            );
+        }, async (interaction) => {
+            if (!interaction.member.roles.cache.has(ServerData.server_info.ReviewRoleID.value)) {
+                interaction.reply({ephemeral: true, content: `You do not have the <@&${ServerData.server_info.ReviewRoleID.value}> Role!`});
+                return;
+            }
+            await interaction.deferReply();
+
+            switch (interaction.options.getSubcommand().toLowerCase()) {
+                case "user":
+                    await this.VerifyUserMatch(interaction);
+                    break;
+                case "match":
+                    await this.VerifyMatch(interaction);
+                    break;
+            }
+        });
+
         EventsHelper.addCommand("matchmake", "Start A New Ranked Match", (command) => {
             command.addStringOption((option) => {
                 option.setName("mode")
@@ -207,6 +239,8 @@ class RankedMatches {
                                     matchThingy.channel.delete();
                                 }
                             });
+                            matchThingy.ongoingMatch.MatchInfo.ReviewInfo.TimeEnded = Math.floor(Date.now() / 1000);
+                            await this.UpdateMatchSave(matchThingy.ongoingMatch.MatchInfo);
                             await matchThingy.ongoingMatch.Players.forEach(async (player) => this.OnMatchEnd(player, matchThingy));
                             await this.CurrentMatches.splice(i, 1);
                             message.delete();
@@ -281,7 +315,7 @@ class RankedMatches {
             }
 
             if (!hasMatchID) {
-                interaction.reply({ content: "You have not played this match!\n Please provide a Match you have played!", ephemeral: true });
+                interaction.editReply({ content: "You have not played this match!\n Please provide a Match you have played!", ephemeral: true });
                 return;
             }
 
@@ -317,13 +351,43 @@ class RankedMatches {
             const button = new Button(interaction.user.id, [
                 new ButtonItems("final-submit", "Submit Information", ButtonStyle.Primary, null, null, false)
             ], async (id, buttonInteraction) => {
+                buttonInteraction.deferReply();
                 if (ServerData.server_info.ReviewChannelID.value == undefined || ServerData.server_info.ReviewChannelID.value == "" || ServerData.server_info.ReviewChannelID.value == " ") {
-                    buttonInteraction.reply(`Uh oh! Please Ping a Moderator and let them know they haven't properly set-up a channel for reviewing!`);
+                    buttonInteraction.editReply(`Uh oh! Please Ping a Moderator and let them know they haven't properly set-up a channel for reviewing!`);
                     return;
                 }
-                await buttonInteraction.reply(`Sent Data to the moderators!`);
+                let match_data = await this.GetMatchData(matchInput);
+                match_data.DiscordInfo.Attachments[buttonInteraction.user.id] = files;
+
                 let review_channel = await this.client.channels.fetch(ServerData.server_info.ReviewChannelID.value);
-                review_channel.send("Yipee! Data send here");
+                if (match_data.ReviewInfo.ThreadID == -1) {
+                    const newReviewThread = await review_channel.threads.create({
+                        name: `Match #${matchInput}`,
+                        autoArchiveDuration: 1440,
+                        type: ChannelType.PublicThread,
+                        reason: `Review Channel for Match #${matchInput}`,
+                    });
+                    match_data.ReviewInfo.ThreadID = newReviewThread.id;
+                }
+                const reviewThread = await review_channel.threads.fetch(match_data.ReviewInfo.ThreadID);
+
+                await this.UpdateMatchSave(match_data);
+
+                let changeData = false;
+                let test = await reviewThread.messages.fetch();
+                test.forEach(x => {
+                    if (x.content.split(": ")[1] == buttonInteraction.user.id) {
+                        changeData = true;
+                        x.edit({content: x.content, files: files});
+                    }
+                });
+
+                if (changeData) await buttonInteraction.editReply(`Data Edited! Reflected to moderators`);
+                else {
+                    await reviewThread.send({content: `User's Global Name - ${buttonInteraction.user.globalName} | User ID: ${buttonInteraction.user.id}`, files: files});
+                    buttonInteraction.editReply(`Sent Data to the moderators!`);
+                }
+
             });
             interaction.followUp({content: "Once you have verified the data, please click the submit button. Otherwise use the `/submit` command again!", components: [button.ActionRow]});
         });
@@ -345,7 +409,7 @@ class RankedMatches {
         const fileSubmitCMDname = "/submit";
         const forgorCMDname = "/placeholder command !!";
 
-        let ongoingMatch = matchThingy.ongoingMatch.clone();
+        let ongoingMatch = matchThingy.ongoingMatch;
         const matchID = ongoingMatch.MatchInfo.MatchID;
         
         let fieldString = "";
@@ -386,8 +450,9 @@ class RankedMatches {
         .setFooter(footer)
         .setTimestamp();
 
-        PlayersManager.AddNewPlayerMatch(player.user.id, ongoingMatch.MatchInfo);
-        // player.send({embeds: [embed]});
+        let player_matchData = new PlayerMatchData();
+        player_matchData.MatchID = matchID;
+        PlayersManager.AddNewPlayerMatch(player.user.id, player_matchData);
                             
         const newThread = await matchThingy.matchCommandChannel.threads.create({
             name: `${player.user.globalName} - ${ongoingMatch.MatchInfo.ModeInfo.Mode} (${ongoingMatch.MatchInfo.ModeInfo.RunType})`,
@@ -395,6 +460,7 @@ class RankedMatches {
             type: ChannelType.PrivateThread,
             reason: `Ranked Match ${ongoingMatch.MatchInfo.ModeInfo.Mode} (${ongoingMatch.MatchInfo.ModeInfo.RunType}) - Completed | Needs Submission By User and Review`,
         });
+
         newThread.members.add(player.user.id);
         newThread.send({embeds: [embed]});
     }
@@ -408,6 +474,10 @@ class RankedMatches {
     }
 
     static async UpdateMatchSave(match) {
+        if (match == undefined) {
+            console.error("Undefined Match Data");
+            return;
+        }
         await fs.mkdir(this.matchDir, { recursive: true }, async (err) => {
             if (err) {
                 console.error('File does not exist');
@@ -439,7 +509,7 @@ class RankedMatches {
             });
             console.log("Finished Getting Files");
         });
-        console.log(jsonFiles);
+        return jsonFiles;
     }
     
 
@@ -527,6 +597,54 @@ class RankedMatches {
         }
         return result;
     }
+
+    static GetMatchData(matchID) {
+        try {
+            // Parse the file contents as JSON
+            const jsonContent = JSON.parse(fs.readFileSync(`${this.matchDir}/${matchID}.json`, 'utf8'));
+            return jsonContent;
+        } catch (error) {
+            console.error('Error parsing JSON:', error);
+        }
+        return jsonContent;
+    }
+
+    // Verification functions
+    static async VerifyUserMatch(interaction) {
+        const userInput = interaction.options.getUser("user");
+        const matchInput = interaction.options.getInteger("match-id");
+
+
+        let match_data = this.GetMatchData(matchInput);
+        let playerInfo = PlayerData.GetPlayerData(userInput.id);
+        
+        if (userInput.id == -1) {
+            interaction.editReply({ephemeral: true, content: "User had **NOT** Played this match! Please Provide a match they have played!"});
+            return;
+        }
+
+        console.log(userInput, matchInput, match_data);
+        let fields = [
+            {
+              name: "Pre-Run Shop Attachment",
+              value: "This is what the reviewers will see when looking for Pre-Run Shop Attachment",
+              inline: false
+            },
+        ];
+        
+        let pagesData = [];
+        pagesData.push(new PagesEmbedData(null,
+        `Match #${matchInput} - Submition Confromation`,
+        "Please make sure the images are correct before submiting the data!", "#00b0f4", fields[i], null, true));
+
+        let embedPage = new Pages(interaction, "submition", pagesData, false);
+
+        await interaction.editReply("Interaction done");
+    }
+
+    static async VerifyMatch(interaction) {
+        await interaction.editReply("Verifying Match Data Isn't coded yet...");
+    }
 }
 
 class OngoingMatchData {
@@ -555,13 +673,23 @@ class MatchData {
 
     ReviewInfo = new ReviewData();
     DiscordInfo = new DiscordData(); // btw, this data shouldn't be included for the bot to display.
-    Rank = 0; // Placement Data of the Player's Match.
 
     FloorInfo = new FloorData();
     ModeInfo = new ModeInfo();
+
+    toJson() {
+        return JSON.parse(JSON.stringify(this));
+    }
+}
+
+class PlayerMatchData {
+    ValidData = false;
     DeathInfo = new DeathData();
     GameInfo = new GameData();
 
+    MatchID = -1;
+    Rank = -1; // Placement Data of the Player's Match.
+    
     toJson() {
         return JSON.parse(JSON.stringify(this));
     }
@@ -570,20 +698,25 @@ class MatchData {
 class ReviewData {
     ValidData = false;
 
-    TimeSubmitted = -1; // Unix Time when Player submitted the match data
+    TimeEnded = -1; // Unix Time when Match Ended
     TimeReviewed = -1; // Unix Time when a Moderator started reviewing the match ID
     Accepted = false; // If the match was accepted by the moderator or not.
 
     Reviewer = "N / A"; // Discord Name + Discord @ ("PooPooFard (@JerrySmith)") of the Player reviewing data
     Feedback = ""; // Mmoderator's feedback
+
+    ThreadID = -1;
 }
 
 class DiscordData {
-    Attachments = []; // Array of URL attachment, for reviewing.
+    Attachments = new Map(); // Array of URL attachment, for reviewing.
+    constructor() {
+        this.Attachments = new Map();
+    }
 }
 
 class ModeInfo {
-    DataValid = false; // If the data is just junk data or actually valid data.
+    ValidData = false; // If the data is just junk data or actually valid data.
 
     Mode = "Normal"; // For other types of modes like Modifiers, SUPER HARD MODE, etc.
     
@@ -600,7 +733,7 @@ class FloorData {
 }
 
 class DeathData {
-    DataValid = false; // If the data is just junk data or actually valid data.
+    ValidData = false; // If the data is just junk data or actually valid data.
 
     Died = false; // If the player Died that round
     Door = 0; // Door Player made to
@@ -608,7 +741,7 @@ class DeathData {
 }
 
 class GameData {
-    DataValid = false; // If the data is just junk data or actually valid data.
+    ValidData = false; // If the data is just junk data or actually valid data.
 
     KnobsSpent = 0; // If played Shop, how much they spent in game
     KnobsGained = 0; // How much Knobs the player gained that match
@@ -748,4 +881,4 @@ class ModifiersTypes {
     }
 }
 
-module.exports = {RankedMatches, MatchData, ReviewData, DiscordData, ModeInfo, FloorData, DeathData, GameData};
+module.exports = {RankedMatches, MatchData, ReviewData, DiscordData, ModeInfo, FloorData, DeathData, GameData, PlayerMatchData};

@@ -89,11 +89,11 @@ class PlayersManager {
         return -1;
     }
 
-    static AddNewPlayerMatch(discordID, match) {
+    static AddNewPlayerMatch(discordID, playerMatchData) {
         for (let i=0; i < this.cached_PlayerInformation.length; i++) {
             const player = this.cached_PlayerInformation[i];
             if (player.DiscordID != discordID) continue;
-            this.cached_PlayerInformation[i].MatchesData.push(match);
+            this.cached_PlayerInformation[i].MatchesData.push(playerMatchData);
             this.UpdateStoredData();
             return true;
         }
@@ -120,15 +120,15 @@ class PlayerData {
     RobloxID = -1;
     DiscordID = -1;
     Elo = 1500; // everyone starts with 1500 Elo
-    MatchesData = [ // An array of MatchData
+    MatchesData = [ // An array of PlayerMatchData
     ];
     RankJoinTime = -1; // Unix Time for when the Player joined the Ranked Discord Bot Manager
     KnobsSpent = 0; // Cool data to track I Guess
     KnobsEarned = 0; // KnobsSpend / Earned is based on their join time.
     Deaths = 0; // How many times player has died in Matches
 
-    AddMatchData(data) {
-        MatchesData.push(data);
+    AddMatchData(id) {
+        MatchesData.push(id);
     }
 
     toJson = function() { return JSON.stringify(this); }

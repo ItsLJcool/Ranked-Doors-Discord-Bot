@@ -10,7 +10,8 @@ class Pages {
     page_buttons;
     curPage = 0;
     isEphemeral = false;
-    constructor(prevInteraction, pageID, pageEmbed_data, ephemeral, callback) {
+    constructor(prevInteraction, pageID, pageEmbed_data, ephemeral, callback, allowAnyoneToSwap) {
+        if (allowAnyoneToSwap == undefined) allowAnyoneToSwap = false;
         this.isEphemeral = ephemeral;
         const _user = (prevInteraction.member == undefined) ? prevInteraction.user.id : prevInteraction.member.user.id;
         for (let i=0; i < pageEmbed_data.length; i++) {
@@ -29,7 +30,7 @@ class Pages {
         ], async (id, buttonInteraction) => {
             const _userButton = (buttonInteraction.member != undefined) ? buttonInteraction.member.user.id : buttonInteraction.user.id;
             const _userId = id.split("_");
-            if (_userId[2] != _userButton) {
+            if (_userId[2] != _userButton && !allowAnyoneToSwap) {
                 buttonInteraction.reply({ephemeral: true, content: "You are not the user who used this command!"});
                 return;
             }
