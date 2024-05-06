@@ -221,6 +221,24 @@ class ServerSaveData {
             onValueChange: (value) => { this.QueueVC_ID.value = value.id; },
         },
     };
+    
+    MatchmakingChannel = {
+        value: "",
+        default: "",
+        inline: true,
+        page: 0,
+        subcmd: { // items in a cmd is always required to set the value to
+            desc: "The Channel that will only allow /matchmake",
+            command: (command) => {
+                command.addChannelOption(option =>
+                    option.setName('channel')
+                        .setDescription('The Channel to set the value to')
+                        .setRequired(true)
+                );
+            },
+            onValueChange: (value) => { this.MatchmakingChannel.value = value.id; },
+        },
+    };
 
     /**
      * Time until users who haven't submitted their screenshots will be considered a loss, and will still lose Elo

@@ -65,6 +65,10 @@ class EventsHelper {
 
         this.client.on(Events.MessageCreate, (interaction) => {
             this.chatInputs.forEach((data, value) => {
+                if (data.prefix == value) {
+                    data.func(interaction);
+                    return;
+                }
                 const pre = (data.prefix == undefined) ? this.prefix : data.prefix;
                 if ((pre + value) !== interaction.content) return;
                 data.func(interaction);
@@ -114,6 +118,10 @@ class EventsHelper {
             return;
         }
         this.chatInputs.set(name, {prefix: prefix, func: commandFunc});
+    }
+    
+    static removeChatCommand(name) {
+        return this.voiceChannelCallbacks.delete(name);
     }
 
     static addButtonCallback(buttonID, callback) {

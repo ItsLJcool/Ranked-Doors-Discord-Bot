@@ -1,5 +1,5 @@
 
-const {AttachmentBuilder, ButtonBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ComponentType, ButtonStyle, ChannelType, PermissionFlagsBits, EmbedBuilder} = require("discord.js");
+const {TextInputBuilder, AttachmentBuilder, ButtonBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ComponentType, ButtonStyle, ChannelType, PermissionFlagsBits, EmbedBuilder} = require("discord.js");
 const fs = require('fs');
 const path = require('path');
 const EventsHelper = require("./EventsHelper");
@@ -606,7 +606,7 @@ class RankedMatches {
         } catch (error) {
             console.error('Error parsing JSON:', error);
         }
-        return jsonContent;
+        return -1;
     }
 
     // Verification functions
@@ -614,32 +614,173 @@ class RankedMatches {
         const userInput = interaction.options.getUser("user");
         const matchInput = interaction.options.getInteger("match-id");
 
-
-        let match_data = this.GetMatchData(matchInput);
-        let playerInfo = PlayerData.GetPlayerData(userInput.id);
+        let playerInfo = PlayersManager.GetPlayerData(userInput.id);
         
-        if (userInput.id == -1) {
+        if (playerInfo == -1) {
+            interaction.editReply({ephemeral: true, content: `This User does **NOT** Have a Ranked Account!`});
+            return;
+        }
+
+        let hasMatch = false;
+        let player_matchData = -1;
+        let player_matchIDX = -1;
+        for (let i=0; i < playerInfo.MatchesData.length; i++) {
+            if (playerInfo.MatchesData[i].MatchID == matchInput) {
+                hasMatch = true;
+                player_matchData = playerInfo.MatchesData[i];
+                player_matchIDX = i;
+                break;
+            }
+        }
+
+        if (!hasMatch || player_matchData === -1 || player_matchIDX === -1) {
             interaction.editReply({ephemeral: true, content: "User had **NOT** Played this match! Please Provide a match they have played!"});
             return;
         }
 
-        console.log(userInput, matchInput, match_data);
-        let fields = [
-            {
-              name: "Pre-Run Shop Attachment",
-              value: "This is what the reviewers will see when looking for Pre-Run Shop Attachment",
-              inline: false
-            },
+        console.log(player_matchData.DeathInfo.Door, player_matchData.DeathInfo.Died, player_matchData.DeathInfo.Cause);
+
+        let can_submitData = true;
+
+        const checkValueNaN = (value) => {
+            const int_value = parseInt(value);
+            if (isNaN(int_value)) can_submitData = false;
+            else value = int_value;
+            return value;
+        }
+
+        let pageFields = [
+        [
+        {name: "Reached Door #", inline: true, value: `${player_matchData.DeathInfo.Door}`, setFunc: (value) => {
+            player_matchData.DeathInfo.Door = value; }},
+
+        {name: "Player Died In Run?", inline: true, value: `${player_matchData.DeathInfo.Died}`, setFunc: (value) => {
+            if (value === "true") value = true;
+            else if (value === "false") value = false;
+            else can_submitData = false;
+            player_matchData.DeathInfo.Died = value; }},
+
+        {name: "Cause of Death?", inline: true, value: `${player_matchData.DeathInfo.Cause}`, setFunc: (value) => {
+            player_matchData.DeathInfo.Cause = value; }},
+        ],[
+        {name: "Knobs Spent", inline: true, value: `${player_matchData.GameInfo.KnobsSpent}`, setFunc: (value) => {
+            player_matchData.GameInfo.KnobsSpent = (value = checkValueNaN(value)); }},
+
+        {name: "Knobs Gained", inline: true, value: `${player_matchData.GameInfo.KnobsGained}`, setFunc: (value) => {
+            player_matchData.GameInfo.KnobsGained = (value = checkValueNaN(value)); }},
+
+        {name: "Gold Found", inline: true, value: `${player_matchData.GameInfo.GoldFound}`, setFunc: (value) => {
+            player_matchData.GameInfo.GoldFound = (value = checkValueNaN(value)); }},
+
+        {name: "Friends Bonus", inline: true, value: `${player_matchData.GameInfo.FriendsBonus}`, setFunc: (value) => {
+            player_matchData.GameInfo.FriendsBonus = (value = checkValueNaN(value)); }},
+
+        {name: "Multiplier", inline: true, value: `${player_matchData.GameInfo.Multiplier}`, setFunc: (value) => {
+            player_matchData.GameInfo.Multiplier = (value = checkValueNaN(value)); }},
+        ]
         ];
         
         let pagesData = [];
-        pagesData.push(new PagesEmbedData(null,
-        `Match #${matchInput} - Submition Confromation`,
-        "Please make sure the images are correct before submiting the data!", "#00b0f4", fields[i], null, true));
+        pagesData.push(new PagesEmbedData({name: `${interaction.user.globalName}`}, `Match #${matchInput} - Verifying Information`,
+        "Use the dropdown box to select a property to edit, please ensure the information is accurate as possible\n"+
+        `If the user doesn't have the proper information, join their thread with the match ID in the <#${ServerData.server_info.MatchmakingChannel.value}> and inform them about what information they need to provide`, "#00b0f4", pageFields[0], null, true));
+        
+        pagesData.push(new PagesEmbedData(pagesData[0].Author, pagesData[0].Title, pagesData[0].Description, pagesData[0].Color,
+        pageFields[1], null, true));
+        
+        let dropboxSelection = [];
+        for (let i=0; i < pageFields.length; i++) {
+            let pushArry = [];
+            for (let j=0; j < pageFields[i].length; j++) pushArry.push(new SelectionItems(pageFields[i][j].name, `${pageFields[i][j].value}`, `${i}_${j}`));
+            dropboxSelection.push(pushArry);
+        }
 
-        let embedPage = new Pages(interaction, "submition", pagesData, false);
+        const button = new Button(interaction.user.id, [
+            new ButtonItems("review-submit", "Submit Review", ButtonStyle.Danger, null, null, false)
+        ], async (id, buttonInteraction) => {
+            await buttonInteraction.deferReply({ephemeral: true});
 
-        await interaction.editReply("Interaction done");
+            console.log(playerInfo.MatchesData[player_matchIDX]);
+            for (let i=0; i < pageFields.length; i++) {
+                for (let j=0; j < pageFields[i].length; j++) {
+                    pageFields[i][j].setFunc(pageFields[i][j].value);
+                }
+            }
+            if (!can_submitData) {
+                buttonInteraction.editReply({ephemeral: true,
+            content: "Uh oh! It looks like you provided values that are not applicable to the data!\nMake sure Booleans, Integers, etc. Are proper!"});
+                return;
+            }
+            interaction.deleteReply();
+            
+            player_matchData.ValidData = true;
+            player_matchData.DeathInfo.ValidData = true;
+            player_matchData.GameInfo.ValidData = true;
+
+            await PlayersManager.UpdateStoredData();
+
+            await buttonInteraction.editReply({content: "Data has been validated!", ephemeral: true});
+        });
+
+        let dropdown = null;
+        let verifyPage = null;
+        let dropdownCallbackVerify = async (id, dropInteraction) => {
+            if (id.split("_")[1] != dropInteraction.user.id) {
+                dropInteraction.reply({content: "You are not the person who used this command!", ephemeral: true});
+                return;
+            }
+            
+            await interaction.editReply({embeds: [verifyPage.pages_embeds[verifyPage.curPage]], components: []});
+
+            let idxs = dropInteraction.values[0].split("_");
+            idxs[0] = parseInt(idxs[0]); idxs[1] = parseInt(idxs[1]);
+
+            let completeFunc = () => {
+                can_submitData = true;
+                verifyPage.pages_embeds[idxs[0]].data.fields = pageFields[idxs[0]];
+
+                interaction.editReply({embeds: [verifyPage.pages_embeds[verifyPage.curPage]], components: [dropdown.ActionRow, verifyPage.page_buttons.ActionRow, button.ActionRow]});
+            }
+            
+            const cancelButton = new Button(dropInteraction.user.id, [
+                new ButtonItems("cancel-review-edit", "Cancel", ButtonStyle.Danger, null, null, false)
+            ], async (id, buttonInteraction) => {
+                dropInteraction.deleteReply();
+                completeFunc();
+            });
+
+            await dropInteraction.reply({components: [cancelButton.ActionRow], content: `<@${dropInteraction.user.id}>\nReply to this message to set the information with what you reply with`});
+            const idxThing = `verifyChat-${dropInteraction.user.id}`;
+            EventsHelper.addChatCommand(idxThing, idxThing, (messageInteraction) => {
+                if (dropInteraction.user.id != messageInteraction.author.id) return;
+                const value = messageInteraction.content;
+                messageInteraction.delete();
+                dropInteraction.deleteReply();
+                EventsHelper.removeChatCommand(idxThing);
+                
+                pageFields[idxs[0]][idxs[1]].value = value;
+                
+                dropboxSelection = [];
+                for (let i=0; i < pageFields.length; i++) {
+                    let pushArry = [];
+                    for (let j=0; j < pageFields[i].length; j++) pushArry.push(new SelectionItems(pageFields[i][j].name, `${pageFields[i][j].value}`, `${i}_${j}`));
+                    dropboxSelection.push(pushArry);
+                }
+                dropdown = new Selection(interaction.user.id, "verify-drop", placeholderText, dropboxSelection[verifyPage.curPage], dropdownCallbackVerify);
+                completeFunc();
+            });
+        }
+
+        const placeholderText = "Select Data To Edit";
+        dropdown = new Selection(interaction.user.id, "verify-drop", placeholderText, dropboxSelection[0], dropdownCallbackVerify);
+
+        verifyPage = new Pages(interaction, "verification", pagesData, false, async (id, pageInteraction) => {
+            dropdown = new Selection(interaction.user.id, "verify-drop", placeholderText, dropboxSelection[verifyPage.curPage], dropdownCallbackVerify);
+            await interaction.editReply({embeds: [verifyPage.pages_embeds[verifyPage.curPage]], components: [dropdown.ActionRow, verifyPage.page_buttons.ActionRow, button.ActionRow]});
+        });
+
+        let contentValue = (player_matchData.ValidData) ? "# This data has been validated by another member! If you think the values are incorrect, you may edit it!" : " ";
+        await interaction.editReply({content: contentValue, embeds: [verifyPage.pages_embeds[verifyPage.curPage]], components: [dropdown.ActionRow, verifyPage.page_buttons.ActionRow, button.ActionRow]});
     }
 
     static async VerifyMatch(interaction) {
@@ -736,18 +877,18 @@ class DeathData {
     ValidData = false; // If the data is just junk data or actually valid data.
 
     Died = false; // If the player Died that round
-    Door = 0; // Door Player made to
+    Door = "???"; // Door Player made to
     Cause = "N / A";
 }
 
 class GameData {
     ValidData = false; // If the data is just junk data or actually valid data.
 
-    KnobsSpent = 0; // If played Shop, how much they spent in game
-    KnobsGained = 0; // How much Knobs the player gained that match
-    GoldFound = 0; // How much Gold the player gained that mach
-    FriendsBonus = 0; // If there was any friends playing with Player
-    Multiplier = 1; // Knob Multiplier
+    KnobsSpent = -1; // If played Shop, how much they spent in game
+    KnobsGained = -1; // How much Knobs the player gained that match
+    GoldFound = -1; // How much Gold the player gained that mach
+    FriendsBonus = -1; // If there was any friends playing with Player
+    Multiplier = -1; // Knob Multiplier
 }
 
 

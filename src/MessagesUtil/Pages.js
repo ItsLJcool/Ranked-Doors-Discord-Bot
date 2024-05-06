@@ -44,14 +44,14 @@ class Pages {
             if (this.curPage+1 >= this.pages_embeds.length) this.page_buttons.ActionRow.components[1].data.disabled = true;
             if (this.curPage-1 < 0) this.page_buttons.ActionRow.components[0].data.disabled = true;
 
-            await prevInteraction.editReply({ephemeral: this.isEphemeral, embeds: [this.pages_embeds[this.curPage]], components: [this.page_buttons.ActionRow]});
+            await this.editReply(prevInteraction);
             buttonInteraction.deleteReply();
             if (typeof callback === "function") callback(id, buttonInteraction);
         });
     }
 
-    reply(interaction) { interaction.reply({ephemeral: this.isEphemeral, embeds: [this.pages_embeds[this.curPage]], components: [this.page_buttons.ActionRow]}); }
-    editReply(interaction) { interaction.editReply({ephemeral: this.isEphemeral, embeds: [this.pages_embeds[this.curPage]], components: [this.page_buttons.ActionRow]}); }
+    async reply(interaction) { await interaction.reply({ephemeral: this.isEphemeral, embeds: [this.pages_embeds[this.curPage]], components: [this.page_buttons.ActionRow]}); }
+    async editReply(interaction) { await interaction.editReply({ephemeral: this.isEphemeral, embeds: [this.pages_embeds[this.curPage]], components: [this.page_buttons.ActionRow]}); }
 }
 
 class PagesEmbedData {
