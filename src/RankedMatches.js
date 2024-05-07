@@ -351,11 +351,19 @@ class RankedMatches {
             const button = new Button(interaction.user.id, [
                 new ButtonItems("final-submit", "Submit Information", ButtonStyle.Primary, null, null, false)
             ], async (id, buttonInteraction) => {
-                buttonInteraction.deferReply();
+                await buttonInteraction.deferReply();
                 if (ServerData.server_info.ReviewChannelID.value == undefined || ServerData.server_info.ReviewChannelID.value == "" || ServerData.server_info.ReviewChannelID.value == " ") {
                     buttonInteraction.editReply(`Uh oh! Please Ping a Moderator and let them know they haven't properly set-up a channel for reviewing!`);
                     return;
                 }
+
+                for (let i=0; i < files.length; i++) {
+                    if (files[i].contentType != "image/png") {
+                        buttonInteraction.editReply(`Uh oh! You uploaded a non-picture to the bot! Please make sure you upload a picture and not a video or a gif.\n**IT MUST BE A .PNG!!!**\nThis is because the picture you take in-game will always be a .png!!`);
+                        return;
+                    }
+                }
+
                 let match_data = await this.GetMatchData(matchInput);
                 match_data.DiscordInfo.Attachments[buttonInteraction.user.id] = files;
 
@@ -638,8 +646,6 @@ class RankedMatches {
             return;
         }
 
-        console.log(player_matchData.DeathInfo.Door, player_matchData.DeathInfo.Died, player_matchData.DeathInfo.Cause);
-
         let can_submitData = true;
 
         const checkValueNaN = (value) => {
@@ -681,12 +687,12 @@ class RankedMatches {
         ];
         
         let pagesData = [];
-        pagesData.push(new PagesEmbedData({name: `${interaction.user.globalName}`}, `Match #${matchInput} - Verifying Information`,
-        "Use the dropdown box to select a property to edit, please ensure the information is accurate as possible\n"+
-        `If the user doesn't have the proper information, join their thread with the match ID in the <#${ServerData.server_info.MatchmakingChannel.value}> and inform them about what information they need to provide`, "#00b0f4", pageFields[0], null, true));
-        
-        pagesData.push(new PagesEmbedData(pagesData[0].Author, pagesData[0].Title, pagesData[0].Description, pagesData[0].Color,
-        pageFields[1], null, true));
+        for (let i=0; i < pageFields.length; i++) {
+            pagesData.push(new PagesEmbedData({name: `${interaction.user.globalName}`}, `Match #${matchInput} - Verifying Information`,
+            "Use the dropdown box to select a property to edit, please ensure the information is accurate as possible\n"+
+            `If the user doesn't have the proper information, join their thread with the match ID in the <#${ServerData.server_info.MatchmakingChannel.value}> and inform them about what information they need to provide`, "#00b0f4",
+            pageFields[i], null, true));
+        }
         
         let dropboxSelection = [];
         for (let i=0; i < pageFields.length; i++) {
@@ -700,7 +706,6 @@ class RankedMatches {
         ], async (id, buttonInteraction) => {
             await buttonInteraction.deferReply({ephemeral: true});
 
-            console.log(playerInfo.MatchesData[player_matchIDX]);
             for (let i=0; i < pageFields.length; i++) {
                 for (let j=0; j < pageFields[i].length; j++) {
                     pageFields[i][j].setFunc(pageFields[i][j].value);
@@ -784,7 +789,210 @@ class RankedMatches {
     }
 
     static async VerifyMatch(interaction) {
-        await interaction.editReply("Verifying Match Data Isn't coded yet...");
+        const matchInput = interaction.options.getInteger("match-id");
+        let match_data = this.GetMatchData(matchInput);
+        if (match_data === -1) {
+            interaction.editReply({ephemeral: true, content: `This match has NOT been played. Please enter a valid Match #`});
+            return;
+        }
+
+        let can_submitData = {
+            valid: true,
+            reason: "N / A"
+        };
+
+        const checkValueNaN = (value, error) => {
+            const int_value = parseInt(value);
+            if (isNaN(int_value)) {
+                can_submitData.valid = false;
+                can_submitData.reason = `Invalid Integer Value in ${error}`
+            }
+            else value = int_value;
+            return value;
+        }
+
+        const modifier_placeholder = (match_data.ModeInfo.Modifiers.length > 0) ? match_data.ModeInfo.Modifiers.join(",") : "N / A";
+
+        let pageFields = [
+        [
+        {name: "Invalidate Match", inline: true, value: `${match_data.Invalid}`, setFunc: (value) => {
+            if (value === "true") value = true;
+            else value = false;
+            match_data.ReviewInfo.Feedback = value; }},
+        {name: "Visited Floors (Array)", inline: true, value: `${match_data.FloorInfo.VisitedFloors.join(", ")}`, setFunc: (value) => {
+            let arryValue = "";
+            if (can_submitData.valid) {
+                arryValue = value.split(",").map(item => item.trim());
+                for (let i=0; i < arryValue.length; i++) {
+                    if (!can_submitData.valid) break;
+                    for (let j=0; j < this.PossibleRankedFloors.length; j++) {
+                        if (this.PossibleRankedFloors[j].name === arryValue[i]) {
+                            can_submitData.valid = true;
+                            break;
+                        }
+                        can_submitData.valid = false;
+                        can_submitData.reason = `# Error: Visited Floors\n**${arryValue[i]}** needs to be a value of one of these:\n${this.PossibleRankedFloors.map(item => item.name).join(", or ")}`;
+                    }
+                }
+            }
+            match_data.FloorInfo.VisitedFloors = arryValue; }},
+
+        {name: "Mode (Shop / No Shop, etc.)", inline: true, value: `${match_data.ModeInfo.Mode}`, setFunc: (value) => {
+            if (can_submitData.valid) {
+                for (let i=0; i < this.PossibleRankedModes.length; i++) {
+                    if (this.PossibleRankedModes[i].name === value) {
+                        can_submitData.valid = true;
+                        break;
+                    }
+                    can_submitData.valid = false;
+                    can_submitData.reason = `# Error: Mode\n**${value}** needs to be a value of one of these:\n${this.PossibleRankedModes.map(item => item.name).join(", or ")}`;
+                }
+            }
+            match_data.ModeInfo.Mode = value; }},
+            
+        {name: "Run Type (Normal, SUPER HARD MODE, etc.)", inline: true, value: `${match_data.ModeInfo.RunType}`, setFunc: (value) => {
+            if (can_submitData.valid) {
+                for (let i=0; i < this.PossibleRankedRunTypes.length; i++) {
+                    if (this.PossibleRankedRunTypes[i].name === value) {
+                        can_submitData.valid = true;
+                        break;
+                    }
+                    can_submitData.valid = false;
+                    can_submitData.reason = `# Error: Run Type\n**${value}** needs to be a value of one of these:\n${this.PossibleRankedRunTypes.map(item => item.name).join(", or ")}`;
+                }
+            }
+            match_data.ModeInfo.RunType = value; }},
+        ],[
+        {name: "Players (In-game)", inline: true, value: `${match_data.ModeInfo.Players}`, setFunc: (value) => {
+            match_data.ModeInfo.Players = (value = checkValueNaN(value, "Players")); }},
+
+        {name: "Alive Players", inline: true, value: `${match_data.ModeInfo.AlivePlayers}`, setFunc: (value) => {
+            match_data.ModeInfo.AlivePlayers = (value = checkValueNaN(value, "Alive Players")); }},
+
+        {name: "Modifiers (If in Modifiers Run)", inline: true, value: `${modifier_placeholder}`, setFunc: (value) => {
+            let arryValue = "";
+            if (can_submitData.valid && match_data.ModeInfo.Modifiers[0] !== "N / A") {
+                arryValue = value.split(",").map(item => item.trim());
+                for (let i=0; i < arryValue.length; i++) {
+                    if (!can_submitData.valid) break;
+                    for (let j=0; j < this.ModifiersText.length; j++) {
+                        if (this.ModifiersText[i].label == value) {
+                            can_submitData.valid = true;
+                            break;
+                        }
+                        can_submitData.valid = false;
+                        can_submitData.reason = `# Error: Modifiers\n**${value}** needs to be a value of one of these:\n${this.ModifiersText.map(item => item.label).join(", ")}`;
+                    }
+                }
+            }
+            match_data.ModeInfo.Modifiers = arryValue; }},
+        {name: "Feedback (Optional)", inline: true, value: `${match_data.ReviewInfo.Feedback}`, setFunc: (value) => {
+            match_data.ReviewInfo.Feedback = value; }},
+        ]
+        ];
+        
+        let pagesData = [];
+        for (let i=0; i < pageFields.length; i++) {
+            pagesData.push(new PagesEmbedData({name: `${interaction.user.globalName}`}, `Match #${matchInput} - Verifying Information`,
+            `Use the dropdown box to select a property to edit, please ensure the information is accurate as possible\nIf the users doesn't have the proper information, join their thread with the match ID in the <#${ServerData.server_info.MatchmakingChannel.value}> and inform them about what information they need to provide`,
+            "#00b0f4", pageFields[i], null, true));
+        }
+        
+        let dropboxSelection = [];
+        for (let i=0; i < pageFields.length; i++) {
+            let pushArry = [];
+            for (let j=0; j < pageFields[i].length; j++) pushArry.push(new SelectionItems(pageFields[i][j].name, `${pageFields[i][j].value}`, `${i}_${j}`));
+            dropboxSelection.push(pushArry);
+        }
+
+        const button = new Button(interaction.user.id, [
+            new ButtonItems("review-submit", "Submit Review", ButtonStyle.Danger, null, null, false)
+        ], async (id, buttonInteraction) => {
+            await buttonInteraction.deferReply({ephemeral: true});
+
+            for (let i=0; i < pageFields.length; i++) {
+                for (let j=0; j < pageFields[i].length; j++) {
+                    pageFields[i][j].setFunc(pageFields[i][j].value);
+                    if (!can_submitData.valid) break;
+                }
+            }
+            if (!can_submitData.valid) {
+                buttonInteraction.editReply({ephemeral: true,
+            content: `Uh oh! It looks like you provided values that are not applicable to the data!\n\n${can_submitData.reason}`});
+                return;
+            }
+            interaction.deleteReply();
+            
+            match_data.ReviewInfo.TimeReviewed = Math.floor(Date.now() / 1000);
+            match_data.ReviewInfo.Reviewer = buttonInteraction.user.id;
+            match_data.ValidData = true;
+            match_data.FloorInfo.ValidData = true;
+            match_data.ModeInfo.ValidData = true;
+
+            await this.UpdateMatchSave(match_data);
+
+            await buttonInteraction.editReply({content: "Data has been validated!", ephemeral: true});
+        });
+
+        let dropdown = null;
+        let verifyPage = null;
+        let dropdownCallbackVerify = async (id, dropInteraction) => {
+            if (id.split("_")[1] != dropInteraction.user.id) {
+                dropInteraction.reply({content: "You are not the person who used this command!", ephemeral: true});
+                return;
+            }
+            
+            await interaction.editReply({embeds: [verifyPage.pages_embeds[verifyPage.curPage]], components: []});
+
+            let idxs = dropInteraction.values[0].split("_");
+            idxs[0] = parseInt(idxs[0]); idxs[1] = parseInt(idxs[1]);
+
+            let completeFunc = () => {
+                can_submitData.valid = true;
+                verifyPage.pages_embeds[idxs[0]].data.fields = pageFields[idxs[0]];
+
+                interaction.editReply({embeds: [verifyPage.pages_embeds[verifyPage.curPage]], components: [dropdown.ActionRow, verifyPage.page_buttons.ActionRow, button.ActionRow]});
+            }
+            
+            const cancelButton = new Button(dropInteraction.user.id, [
+                new ButtonItems("cancel-review-edit", "Cancel", ButtonStyle.Danger, null, null, false)
+            ], async (id, buttonInteraction) => {
+                dropInteraction.deleteReply();
+                completeFunc();
+            });
+
+            await dropInteraction.reply({components: [cancelButton.ActionRow], content: `<@${dropInteraction.user.id}>\nReply to this message to set the information with what you reply with`});
+            const idxThing = `verifyChat-${dropInteraction.user.id}`;
+            EventsHelper.addChatCommand(idxThing, idxThing, (messageInteraction) => {
+                if (dropInteraction.user.id != messageInteraction.author.id) return;
+                const value = messageInteraction.content;
+                messageInteraction.delete();
+                dropInteraction.deleteReply();
+                EventsHelper.removeChatCommand(idxThing);
+                
+                pageFields[idxs[0]][idxs[1]].value = value;
+                
+                dropboxSelection = [];
+                for (let i=0; i < pageFields.length; i++) {
+                    let pushArry = [];
+                    for (let j=0; j < pageFields[i].length; j++) pushArry.push(new SelectionItems(pageFields[i][j].name, `${pageFields[i][j].value}`, `${i}_${j}`));
+                    dropboxSelection.push(pushArry);
+                }
+                dropdown = new Selection(interaction.user.id, "verify-drop-match", placeholderText, dropboxSelection[verifyPage.curPage], dropdownCallbackVerify);
+                completeFunc();
+            });
+        }
+
+        const placeholderText = "Select Data To Edit";
+        dropdown = new Selection(interaction.user.id, "verify-drop-match", placeholderText, dropboxSelection[0], dropdownCallbackVerify);
+
+        verifyPage = new Pages(interaction, "verification-match", pagesData, false, async (id, pageInteraction) => {
+            dropdown = new Selection(interaction.user.id, "verify-drop-match", placeholderText, dropboxSelection[verifyPage.curPage], dropdownCallbackVerify);
+            await interaction.editReply({embeds: [verifyPage.pages_embeds[verifyPage.curPage]], components: [dropdown.ActionRow, verifyPage.page_buttons.ActionRow, button.ActionRow]});
+        });
+
+        let contentValue = (match_data.ValidData) ? "# This data has been validated by another member! If you think the values are incorrect, you may edit it!" : " ";
+        await interaction.editReply({content: contentValue, embeds: [verifyPage.pages_embeds[verifyPage.curPage]], components: [dropdown.ActionRow, verifyPage.page_buttons.ActionRow, button.ActionRow]});
     }
 }
 
@@ -808,7 +1016,7 @@ class OngoingMatchData {
 
 class MatchData {
     ValidData = false;
-    Invalid = true; // If the admins didn't validate a match after a period of time, then invalidate the match. It will sill be under the verified Player's data though.
+    Invalid = false; // If the admins didn't validate a match after a period of time, then invalidate the match. It will sill be under the verified Player's data though.
 
     MatchID = -1; // the ID of the match
 
@@ -844,7 +1052,7 @@ class ReviewData {
     Accepted = false; // If the match was accepted by the moderator or not.
 
     Reviewer = "N / A"; // Discord Name + Discord @ ("PooPooFard (@JerrySmith)") of the Player reviewing data
-    Feedback = ""; // Mmoderator's feedback
+    Feedback = "N / A"; // Mmoderator's feedback
 
     ThreadID = -1;
 }
@@ -859,11 +1067,11 @@ class DiscordData {
 class ModeInfo {
     ValidData = false; // If the data is just junk data or actually valid data.
 
-    Mode = "Normal"; // For other types of modes like Modifiers, SUPER HARD MODE, etc.
+    Mode = "???"; // For other types of modes like Modifiers, SUPER HARD MODE, etc.
     
     Players = 0; // How may players in the game
     AlivePlayers = 0; // How Many Players came out alive
-    RunType = "No Shop"; // No Shop, Shop, etc.
+    RunType = "???"; // No Shop, Shop, etc.
     Modifiers = []; // Array of string of modifier Names used (If Mode was Modifiers)
 }
 

@@ -17,11 +17,15 @@ class Pages {
         for (let i=0; i < pageEmbed_data.length; i++) {
             const data = pageEmbed_data[i];
             
-            const embed = new EmbedBuilder().setAuthor(data.Author).setTitle(data.Title).setDescription(data.Description).setColor(data.Color);
-            if (data.Fields != undefined) embed.addFields(data.Fields);
-            if (data.Timestamp) embed.setTimestamp();
-            if (data.Footer != undefined) embed.setFooter(data.Footer)
-            this.pages_embeds.push(embed);
+            try {
+                const embed = new EmbedBuilder().setAuthor(data.Author).setTitle(data.Title).setDescription(data.Description).setColor(data.Color);
+                if (data.Fields != undefined) embed.addFields(data.Fields);
+                if (data.Timestamp) embed.setTimestamp();
+                if (data.Footer != undefined) embed.setFooter(data.Footer)
+                this.pages_embeds.push(embed);
+            } catch(e) {
+                console.error(e);
+            }
         }
 
         this.page_buttons = new Button(_user, [
