@@ -111,6 +111,17 @@ class RankedMatches {
             });
         },
         async (interaction) => {
+            if (ServerData.server_info.MatchmakingChannel.value != undefined || ServerData.server_info.MatchmakingChannel.value == "" || ServerData.server_info.MatchmakingChannel.value == " ") {
+                if (interaction.channelId != ServerData.server_info.MatchmakingChannel.value) {
+                    interaction.reply({content: `You can only use this command in the <#${ServerData.server_info.MatchmakingChannel.value}> channel!`, ephemeral: true});
+                    return;
+                }
+            }
+
+            if (PlayersManager.GetPlayerData(interaction.user.id) == -1) {
+                interaction.reply({content: "You need to create a profile first!\nPlease do `/register`!", ephemeral: true});
+                return;
+            }
             await interaction.deferReply({content: `Setting Up`, ephemeral: true});
 
             const mode = interaction.options.getString("mode");
