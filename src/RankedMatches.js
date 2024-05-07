@@ -212,6 +212,7 @@ class RankedMatches {
                                 // buttonInteraction.reply({content: "There isn't enough players to start!", ephemeral: true});
                                 // return;
                             }
+                            EventsHelper.removeVC_Callback(matchThingy.channel.id);
                             matchThingy.ongoingMatch.MatchInfo.ModeInfo.Players = matchThingy.channel.members.size;
                             matchThingy.channel.permissionOverwrites.set([
                                 {
@@ -224,6 +225,7 @@ class RankedMatches {
                             
                             await message.edit({components: [button.ActionRow]});
 
+                            matchThingy.ongoingMatch.MatchInfo.DiscordInfo.PlayerDiscordIDs = [...matchThingy.channel.members.keys()];
                             buttonInteraction.reply({content: "Match Started!\nWhen the game is over, make sure to click the End Match button!", ephemeral: true});
                             return;
                         }
@@ -232,7 +234,6 @@ class RankedMatches {
                         for (let i=0; i < this.CurrentMatches.length; i++) {
                             const matchThingy = this.CurrentMatches[i];
                             if (matchThingy.createdUserID != buttonInteraction.member.user.id) continue;
-                            EventsHelper.removeVC_Callback(matchThingy.channel.id);
                             await EventsHelper.addVC_Callback(matchThingy.channel.id, (oldState, newState, type) => {
                                 if (matchThingy.channel.members.size <= 0) {
                                     EventsHelper.removeVC_Callback(matchThingy.channel.id);
@@ -428,12 +429,8 @@ class RankedMatches {
                 value: fieldString,
                 inline: true
             },
-            {
-                name: "Current Elo Rank",
-                value: `${playerData.Elo}`,
-                inline: true
-            },
         ];
+        const eloRankingsArray = Object.entries(playerData.Elo).map(([name, value]) => ({ name: `${name} Elo:`, value: `${value}`, inline: true }));
 
         let footer = {text: `Match #${matchID}`};
 
@@ -646,11 +643,17 @@ class RankedMatches {
             return;
         }
 
-        let can_submitData = true;
+        let can_submitData = {
+            valid: true,
+            reason: "N / A"
+        };
 
         const checkValueNaN = (value) => {
             const int_value = parseInt(value);
-            if (isNaN(int_value)) can_submitData = false;
+            if (isNaN(int_value)) {
+                can_submitData.value = false;
+                can_submitData.reason = `Invalid Integer Value in **${error}**`;
+            }
             else value = int_value;
             return value;
         }
@@ -663,26 +666,29 @@ class RankedMatches {
         {name: "Player Died In Run?", inline: true, value: `${player_matchData.DeathInfo.Died}`, setFunc: (value) => {
             if (value === "true") value = true;
             else if (value === "false") value = false;
-            else can_submitData = false;
+            else {
+                can_submitData.value = false;
+                can_submitData.reason = "Invalid Boolean: **Player Died In Run?**"
+            }
             player_matchData.DeathInfo.Died = value; }},
 
         {name: "Cause of Death?", inline: true, value: `${player_matchData.DeathInfo.Cause}`, setFunc: (value) => {
             player_matchData.DeathInfo.Cause = value; }},
         ],[
         {name: "Knobs Spent", inline: true, value: `${player_matchData.GameInfo.KnobsSpent}`, setFunc: (value) => {
-            player_matchData.GameInfo.KnobsSpent = (value = checkValueNaN(value)); }},
+            player_matchData.GameInfo.KnobsSpent = (value = checkValueNaN(value, "Knobs Spent")); }},
 
         {name: "Knobs Gained", inline: true, value: `${player_matchData.GameInfo.KnobsGained}`, setFunc: (value) => {
-            player_matchData.GameInfo.KnobsGained = (value = checkValueNaN(value)); }},
+            player_matchData.GameInfo.KnobsGained = (value = checkValueNaN(value, "Knobs Gained")); }},
 
         {name: "Gold Found", inline: true, value: `${player_matchData.GameInfo.GoldFound}`, setFunc: (value) => {
-            player_matchData.GameInfo.GoldFound = (value = checkValueNaN(value)); }},
+            player_matchData.GameInfo.GoldFound = (value = checkValueNaN(value, "Gold Found")); }},
 
         {name: "Friends Bonus", inline: true, value: `${player_matchData.GameInfo.FriendsBonus}`, setFunc: (value) => {
-            player_matchData.GameInfo.FriendsBonus = (value = checkValueNaN(value)); }},
+            player_matchData.GameInfo.FriendsBonus = (value = checkValueNaN(value, "Friends Bonus")); }},
 
         {name: "Multiplier", inline: true, value: `${player_matchData.GameInfo.Multiplier}`, setFunc: (value) => {
-            player_matchData.GameInfo.Multiplier = (value = checkValueNaN(value)); }},
+            player_matchData.GameInfo.Multiplier = (value = checkValueNaN(value, "Multiplier")); }},
         ]
         ];
         
@@ -704,16 +710,21 @@ class RankedMatches {
         const button = new Button(interaction.user.id, [
             new ButtonItems("review-submit", "Submit Review", ButtonStyle.Danger, null, null, false)
         ], async (id, buttonInteraction) => {
+            if (buttonInteraction.user.id != interaction.user.id) {
+                buttonInteraction.reply({content: "You can't use this button!", ephemeral: true});
+                return;
+            }
             await buttonInteraction.deferReply({ephemeral: true});
 
             for (let i=0; i < pageFields.length; i++) {
                 for (let j=0; j < pageFields[i].length; j++) {
                     pageFields[i][j].setFunc(pageFields[i][j].value);
+                    if (!can_submitData.valid) break;
                 }
             }
-            if (!can_submitData) {
+            if (!can_submitData.valid) {
                 buttonInteraction.editReply({ephemeral: true,
-            content: "Uh oh! It looks like you provided values that are not applicable to the data!\nMake sure Booleans, Integers, etc. Are proper!"});
+                content: `Uh oh! It looks like you provided values that are not applicable to the data!\n\n${can_submitData.reason}`});
                 return;
             }
             interaction.deleteReply();
@@ -741,7 +752,7 @@ class RankedMatches {
             idxs[0] = parseInt(idxs[0]); idxs[1] = parseInt(idxs[1]);
 
             let completeFunc = () => {
-                can_submitData = true;
+                can_submitData.valid = true;
                 verifyPage.pages_embeds[idxs[0]].data.fields = pageFields[idxs[0]];
 
                 interaction.editReply({embeds: [verifyPage.pages_embeds[verifyPage.curPage]], components: [dropdown.ActionRow, verifyPage.page_buttons.ActionRow, button.ActionRow]});
@@ -750,6 +761,10 @@ class RankedMatches {
             const cancelButton = new Button(dropInteraction.user.id, [
                 new ButtonItems("cancel-review-edit", "Cancel", ButtonStyle.Danger, null, null, false)
             ], async (id, buttonInteraction) => {
+                if (buttonInteraction.user.id != interaction.user.id) {
+                    buttonInteraction.reply({content: "You are not the person who used this command!", ephemeral: true});
+                    return;
+                }
                 dropInteraction.deleteReply();
                 completeFunc();
             });
@@ -805,7 +820,7 @@ class RankedMatches {
             const int_value = parseInt(value);
             if (isNaN(int_value)) {
                 can_submitData.valid = false;
-                can_submitData.reason = `Invalid Integer Value in ${error}`
+                can_submitData.reason = `Invalid Integer Value in **${error}**`;
             }
             else value = int_value;
             return value;
@@ -819,6 +834,10 @@ class RankedMatches {
             if (value === "true") value = true;
             else value = false;
             match_data.ReviewInfo.Feedback = value; }},
+        {name: "Accept Match", inline: true, value: `${match_data.Invalid}`, setFunc: (value) => {
+            if (value === "true") value = true;
+            else value = false;
+            match_data.ReviewInfo.Accepted = value; }},
         {name: "Visited Floors (Array)", inline: true, value: `${match_data.FloorInfo.VisitedFloors.join(", ")}`, setFunc: (value) => {
             let arryValue = "";
             if (can_submitData.valid) {
@@ -871,7 +890,7 @@ class RankedMatches {
 
         {name: "Modifiers (If in Modifiers Run)", inline: true, value: `${modifier_placeholder}`, setFunc: (value) => {
             let arryValue = "";
-            if (can_submitData.valid && match_data.ModeInfo.Modifiers[0] !== "N / A") {
+            if (can_submitData.valid && match_data.ModeInfo.RunType == "Modifiers") {
                 arryValue = value.split(",").map(item => item.trim());
                 for (let i=0; i < arryValue.length; i++) {
                     if (!can_submitData.valid) break;
@@ -908,6 +927,10 @@ class RankedMatches {
         const button = new Button(interaction.user.id, [
             new ButtonItems("review-submit", "Submit Review", ButtonStyle.Danger, null, null, false)
         ], async (id, buttonInteraction) => {
+            if (buttonInteraction.user.id != interaction.user.id) {
+                buttonInteraction.reply({ephemeral: true, content: "You can't use this button!"});
+                return;
+            }
             await buttonInteraction.deferReply({ephemeral: true});
 
             for (let i=0; i < pageFields.length; i++) {
@@ -928,6 +951,7 @@ class RankedMatches {
             match_data.ValidData = true;
             match_data.FloorInfo.ValidData = true;
             match_data.ModeInfo.ValidData = true;
+            match_data.ReviewInfo.ValidData = true;
 
             await this.UpdateMatchSave(match_data);
 
@@ -957,6 +981,10 @@ class RankedMatches {
             const cancelButton = new Button(dropInteraction.user.id, [
                 new ButtonItems("cancel-review-edit", "Cancel", ButtonStyle.Danger, null, null, false)
             ], async (id, buttonInteraction) => {
+                if (buttonInteraction.user.id != dropInteraction.user.id) {
+                    buttonInteraction.reply({content: "You are not the person who used this command!", ephemeral: true});
+                    return;
+                }
                 dropInteraction.deleteReply();
                 completeFunc();
             });
@@ -1059,6 +1087,7 @@ class ReviewData {
 
 class DiscordData {
     Attachments = new Map(); // Array of URL attachment, for reviewing.
+    PlayerDiscordIDs = [];
     constructor() {
         this.Attachments = new Map();
     }

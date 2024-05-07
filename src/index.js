@@ -42,20 +42,10 @@ client.on(Events.ClientReady, async (x) => {
 
     // Embed showcase, and attachment showcase
     EventsHelper.addCommand("register", "Register an account to Ranked Doors Bot", (command) => {
-        command.addStringOption(option =>
-            option.setName("roblox")
-            .setDescription("Your Roblox ID")
-            .setRequired(true)
-        );
     },
     async (interaction) => {
         const discord = interaction.member;
-        const robloxID = interaction.options.getString("roblox");
-        if (isNaN(robloxID)) {
-            await interaction.reply({content: "Make sure your roblox ID is a valid number!", ephemeral: true});
-            return;
-        }
-        const returnType = PlayersManager.SetUpPlayer(discord, robloxID);
+        const returnType = PlayersManager.SetUpPlayer(discord);
         if (!returnType[0]) {
             await interaction.reply({content: "Uh Oh! Looks like your already signed up!", ephemeral: true});
             return;
@@ -75,7 +65,7 @@ client.on(Events.ClientReady, async (x) => {
           },
           {
             name: "Elo Rating - How It Works",
-            value: `Everyone starts off with ${player.Elo} Elo, and by winning and playing matches, you can increase your Elo higher.`,
+            value: `Everyone starts off with ${PlayersManager.DefaultElo} Elo, and by winning and playing matches, you can increase your Elo higher.`,
             inline: false
           },
         )

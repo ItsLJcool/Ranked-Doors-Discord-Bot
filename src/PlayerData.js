@@ -35,17 +35,18 @@ class PlayersManager {
     }
 
     // returns true if the player is in the database, false if player exists already.
-    static SetUpPlayer(member, robloxID) {
+    static SetUpPlayer(member) {
         const discordID = parseInt(member.user.id);
-        robloxID = parseInt(robloxID);
-        if (isNaN(discordID) || isNaN(robloxID)) return [false, null];
+        if (isNaN(discordID)) return [false, null];
         for (let i=0; i < this.cached_PlayerInformation.length; i++) {
             const player = this.cached_PlayerInformation[i];
-            
-            if (player.RobloxID === robloxID || player.DiscordID === discordID) return [false, null];
         }
         let newPlayer = new PlayerData();
-        newPlayer.RobloxID = robloxID;
+
+        newPlayer.Elo = new Map();
+        newPlayer.Elo["Normal"] = PlayersManager.DefaultElo;
+        newPlayer.Elo["SUPER HARD MODE"] = PlayersManager.DefaultElo;
+
         newPlayer.DiscordID = discordID;
         newPlayer.DiscordName = member.user.globalName;
         newPlayer.DiscordNickname = member.nickname;
@@ -110,6 +111,7 @@ class PlayersManager {
         return (player.DiscordNickname != null) ? player.DiscordNickname : player.DiscordName;
     }
     
+    static DefaultElo = 1500;
 }
 
 class PlayerData {
@@ -117,9 +119,8 @@ class PlayerData {
 
     DiscordName = "Placeholder";
     DiscordNickname = "Nickname Placeholder";
-    RobloxID = -1;
     DiscordID = -1;
-    Elo = 1500; // everyone starts with 1500 Elo
+    Elo = new Map(); // everyone starts with 1500 Elo
     MatchesData = [ // An array of PlayerMatchData
     ];
     RankJoinTime = -1; // Unix Time for when the Player joined the Ranked Discord Bot Manager
