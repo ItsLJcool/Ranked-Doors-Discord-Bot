@@ -3,16 +3,16 @@ const {Events, SlashCommandBuilder} = require("discord.js");
 class EventsHelper {
     static prefix = "r?";
 
-    commands;
-    chatInputs;
-    client;
+    static commands;
+    static chatInputs;
+    static client;
     
-    buttonCallbacks;
-    dropdownCallbacks;
+    static buttonCallbacks;
+    static dropdownCallbacks;
 
-    modalCallbacks;
+    static modalCallbacks;
 
-    voiceChannelCallbacks;
+    static voiceChannelCallbacks;
     static init(_client) {
         this.client = _client;
         this.commands = new Map();

@@ -245,7 +245,7 @@ class RankedMatches {
                         for (let i=0; i < this.CurrentMatches.length; i++) {
                             const matchThingy = this.CurrentMatches[i];
                             if (matchThingy.createdUserID != buttonInteraction.member.user.id) continue;
-                            await EventsHelper.addVC_Callback(matchThingy.channel.id, (oldState, newState, type) => {
+                            EventsHelper.addVC_Callback(matchThingy.channel.id, (oldState, newState, type) => {
                                 if (matchThingy.channel.members.size <= 0) {
                                     EventsHelper.removeVC_Callback(matchThingy.channel.id);
                                     matchThingy.channel.delete();
@@ -254,7 +254,7 @@ class RankedMatches {
                             matchThingy.ongoingMatch.MatchInfo.ReviewInfo.TimeEnded = Math.floor(Date.now() / 1000);
                             await this.UpdateMatchSave(matchThingy.ongoingMatch.MatchInfo);
                             await matchThingy.ongoingMatch.Players.forEach(async (player) => this.OnMatchEnd(player, matchThingy));
-                            await this.CurrentMatches.splice(i, 1);
+                            this.CurrentMatches.splice(i, 1);
                             message.delete();
                             return;
                         }
@@ -306,7 +306,19 @@ class RankedMatches {
                 option.setName("players").setDescription("The Screenshot of all the players in the game.").setRequired(true)
             );
         }, async (interaction) => {
-            await interaction.deferReply();
+            const channelMatchmaking = await EventsHelper.client.channels.cache.filter(x => (x.isThread() && x.parentId == ServerData.server_info.MatchmakingChannel.value));
+            let inThreadedChannel = false;
+            for (const id of channelMatchmaking.keys()) {
+                if (id == interaction.channelId) {
+                    inThreadedChannel = true;
+                    break;
+                }
+            }
+            if (!inThreadedChannel) {
+                interaction.reply({ content: `You must use this Command in the <#${ServerData.server_info.MatchmakingChannel.value}> threads only!!`, ephemeral: true });
+                return;
+            }
+            await interaction.deferReply({content: "Getting the bot ready..."});
 
             const _user = (interaction.member == undefined) ? interaction.user : interaction.member.user;
             const matchInput = interaction.options.getInteger("match-id");
@@ -352,7 +364,7 @@ class RankedMatches {
             let pagesData = [];
             for (let i=0; i < files.length; i++) {
                 pagesData.push(new PagesEmbedData(null,
-                `Match #${matchInput} - Submition Confromation`,
+                `Match #${matchInput} - Submition Confirm`,
                 "Please make sure the images are correct before submiting the data!", "#00b0f4", fields[i], null, true));
             }
 
@@ -360,10 +372,12 @@ class RankedMatches {
             for (let i=0; i < embedPage.pages_embeds.length; i++) embedPage.pages_embeds[i].setImage(files[i].attachment);
             await interaction.editReply({ephemeral: embedPage.isEphemeral, embeds: [embedPage.pages_embeds[embedPage.curPage]], components: [embedPage.page_buttons.ActionRow]});
             
+            let followUpReply = null;
             const button = new Button(interaction.user.id, [
                 new ButtonItems("final-submit", "Submit Information", ButtonStyle.Primary, null, null, false)
             ], async (id, buttonInteraction) => {
-                await buttonInteraction.deferReply();
+                if (followUpReply != undefined) await followUpReply.delete();
+                await buttonInteraction.deferReply({content: "Saving pictures, and sending them to moderators!"});
                 if (ServerData.server_info.ReviewChannelID.value == undefined || ServerData.server_info.ReviewChannelID.value == "" || ServerData.server_info.ReviewChannelID.value == " ") {
                     buttonInteraction.editReply(`Uh oh! Please Ping a Moderator and let them know they haven't properly set-up a channel for reviewing!`);
                     return;
@@ -409,7 +423,7 @@ class RankedMatches {
                 }
 
             });
-            interaction.followUp({content: "Once you have verified the data, please click the submit button. Otherwise use the `/submit` command again!", components: [button.ActionRow]});
+            followUpReply = await interaction.followUp({fetchReply: true, content: `Once you have verified the data, please click the submit button. Otherwise use the `/submit` command again!`, components: [button.ActionRow]});
         });
     }
 
@@ -441,7 +455,7 @@ class RankedMatches {
                 inline: true
             },
         ];
-        const eloRankingsArray = Object.entries(playerData.Elo).map(([name, value]) => ({ name: `${name} Elo:`, value: `${value}`, inline: true }));
+        fields = fields.concat(Object.entries(playerData.Elo).map(([name, value]) => ({ name: `${name} Elo:`, value: `${value}`, inline: true })));
 
         let footer = {text: `Match #${matchID}`};
 
@@ -471,7 +485,7 @@ class RankedMatches {
         PlayersManager.AddNewPlayerMatch(player.user.id, player_matchData);
                             
         const newThread = await matchThingy.matchCommandChannel.threads.create({
-            name: `${player.user.globalName} - ${ongoingMatch.MatchInfo.ModeInfo.Mode} (${ongoingMatch.MatchInfo.ModeInfo.RunType})`,
+            name: `${player.user.globalName} - Match #${matchID} | ${ongoingMatch.MatchInfo.ModeInfo.Mode} (${ongoingMatch.MatchInfo.ModeInfo.RunType})`,
             autoArchiveDuration: 1440,
             type: ChannelType.PrivateThread,
             reason: `Ranked Match ${ongoingMatch.MatchInfo.ModeInfo.Mode} (${ongoingMatch.MatchInfo.ModeInfo.RunType}) - Completed | Needs Submission By User and Review`,
