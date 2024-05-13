@@ -384,7 +384,7 @@ class RankedMatches {
                 }
 
                 for (let i=0; i < files.length; i++) {
-                    if (files[i].contentType != "image/png") {
+                    if (!files[i].contentType.includes("image/")) {
                         buttonInteraction.editReply(`Uh oh! You uploaded a non-picture to the bot! Please make sure you upload a picture and not a video or a gif.\n**IT MUST BE A .PNG!!!**\nThis is because the picture you take in-game will always be a .png!!`);
                         return;
                     }
@@ -423,7 +423,7 @@ class RankedMatches {
                 }
 
             });
-            followUpReply = await interaction.followUp({fetchReply: true, content: `Once you have verified the data, please click the submit button. Otherwise use the `/submit` command again!`, components: [button.ActionRow]});
+            followUpReply = await interaction.followUp({fetchReply: true, content: "Once you have verified the data, please click the submit button. Otherwise use the `/submit` command again!", components: [button.ActionRow]});
         });
     }
 
@@ -628,6 +628,25 @@ class RankedMatches {
         return result;
     }
 
+    /**
+     * This will return if the inputed MatchID has all of the User's MatchData Verified, and the MatchData itself
+     */
+    static async CheckMatchDataReviewed(matchID) {
+        const matchData = await this.GetMatchData(matchID);
+        if (matchData == -1) return {check: false, reason: "Match ID Doesn't exist"}; // no match was found
+        if (!matchData.ValidData) return {check: false, reason: "MatchData hasn't been Verified yet. Please use /verify match to verify the data."};
+        playerIDs = matchData.DiscordInfo.PlayerDiscordIDs;
+        
+        // Now we loop though all the items in the array, and check if their data has been validated
+        for (let i=0; i < playerIDs.length; i++) {
+            const playerData = await PlayersManager.GetPlayerData(playerIDs[i]);
+            if (playerData == -1) return {check: false, reason: `Player with ID: ${playerIDs[i]} does not have the Data for this match.... huh?`}; // a player doesn't have data for this match... somehow?
+            if (!playerData.ValidData) return {check: false, reason: `Player with ID: ${playerIDs[i]} does not have Valid MatchData. Please use /verify user to verify their data`};
+        }
+
+        return {check: true};
+    }
+
     static GetMatchData(matchID) {
         try {
             // Parse the file contents as JSON
@@ -635,8 +654,8 @@ class RankedMatches {
             return jsonContent;
         } catch (error) {
             console.error('Error parsing JSON:', error);
+            return -1;
         }
-        return -1;
     }
 
     // Verification functions
@@ -981,6 +1000,7 @@ class RankedMatches {
             await this.UpdateMatchSave(match_data);
 
             await buttonInteraction.editReply({content: "Data has been validated!", ephemeral: true});
+            console.log(this.CheckMatchDataReviewed())
         });
 
         let dropdown = null;
@@ -1146,11 +1166,11 @@ class DeathData {
 class GameData {
     ValidData = false; // If the data is just junk data or actually valid data.
 
-    KnobsSpent = -1; // If played Shop, how much they spent in game
-    KnobsGained = -1; // How much Knobs the player gained that match
-    GoldFound = -1; // How much Gold the player gained that mach
-    FriendsBonus = -1; // If there was any friends playing with Player
-    Multiplier = -1; // Knob Multiplier
+    KnobsSpent = "N / A"; // If played Shop, how much they spent in game
+    KnobsGained = "N / A"; // How much Knobs the player gained that match
+    GoldFound = "N / A"; // How much Gold the player gained that mach
+    FriendsBonus = "N / A"; // If there was any friends playing with Player
+    Multiplier = "N / A"; // Knob Multiplier
 }
 
 
