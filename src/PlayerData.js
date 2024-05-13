@@ -90,6 +90,14 @@ class PlayersManager {
         return -1;
     }
 
+    static GetPlayerMatchData(playerData, matchID) {
+        for (let i=0; i < playerData.MatchesData.length; i++) {
+            if (playerData.MatchesData[i].MatchID != matchID) continue;
+            return playerData.MatchesData[i];
+        }
+        return false;
+    }
+
     static AddNewPlayerMatch(discordID, playerMatchData) {
         for (let i=0; i < this.cached_PlayerInformation.length; i++) {
             const player = this.cached_PlayerInformation[i];

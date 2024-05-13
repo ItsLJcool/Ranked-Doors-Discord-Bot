@@ -632,19 +632,27 @@ class RankedMatches {
      * This will return if the inputed MatchID has all of the User's MatchData Verified, and the MatchData itself
      */
     static async CheckMatchDataReviewed(matchID) {
+
         const matchData = await this.GetMatchData(matchID);
-        if (matchData == -1) return {check: false, reason: "Match ID Doesn't exist"}; // no match was found
-        if (!matchData.ValidData) return {check: false, reason: "MatchData hasn't been Verified yet. Please use /verify match to verify the data."};
-        playerIDs = matchData.DiscordInfo.PlayerDiscordIDs;
+        if (matchData == -1) return {players: false, check: false, reason: "Match ID Doesn't exist"}; // no match was found
+        const playerIDs = matchData.DiscordInfo.PlayerDiscordIDs;
         
         // Now we loop though all the items in the array, and check if their data has been validated
         for (let i=0; i < playerIDs.length; i++) {
             const playerData = await PlayersManager.GetPlayerData(playerIDs[i]);
-            if (playerData == -1) return {check: false, reason: `Player with ID: ${playerIDs[i]} does not have the Data for this match.... huh?`}; // a player doesn't have data for this match... somehow?
-            if (!playerData.ValidData) return {check: false, reason: `Player with ID: ${playerIDs[i]} does not have Valid MatchData. Please use /verify user to verify their data`};
+            const playerMatch = await PlayersManager.GetPlayerMatchData(playerData, matchID);
+            if (playerData == -1) return {players: false, check: false, reason: `Player with ID: ${playerIDs[i]} doesnt exist...? what?`};
+            if (playerMatch == -1) return {players: false, check: false, reason: `Player with ID: ${playerIDs[i]} does not have the Data for this match.... huh?`}; // a player doesn't have data for this match... somehow?
+            if (!playerMatch.ValidData) return {players: false, check: false, reason: `Player with ID: ${playerIDs[i]} does not have Valid MatchData. Please use /verify user to verify their data`};
         }
+        if (!matchData.ValidData) return {players: true, check: false, reason: "MatchData hasn't been Verified yet. Please use /verify match to verify the data."};
+        return {players: true, check: true};
+    }
 
-        return {check: true};
+    static async AllDataVerified(match_data) {
+        
+        let review_channel = await this.client.channels.fetch(ServerData.server_info.ReviewChannelID.value);
+        const reviewThread = await review_channel.threads.fetch(match_data.ReviewInfo.ThreadID);
     }
 
     static GetMatchData(matchID) {
@@ -854,6 +862,26 @@ class RankedMatches {
             interaction.editReply({ephemeral: true, content: `This match has NOT been played. Please enter a valid Match #`});
             return;
         }
+        const playersValid = await this.CheckMatchDataReviewed(matchInput);
+        if (!playersValid.players) {
+            let playersToValidate = [];
+            let players = "";
+            const matchData = await this.GetMatchData(matchInput);
+            if (matchData != -1 && matchData.ValidData) {
+                const playerIDs = matchData.DiscordInfo.PlayerDiscordIDs;
+    
+                for (let i=0; i < playerIDs.length; i++) {
+                    const playerData = await PlayersManager.GetPlayerData(playerIDs[i]);
+                    const playerMatch = await PlayersManager.GetPlayerMatchData(playerData, matchInput);
+                    if (playerMatch == -1 || playerData == -1 || playerMatch.ValidData) continue;
+                    playersToValidate.push(playerData.DiscordName);
+                }
+                players = playersToValidate.join("\n");
+            }
+            await interaction.deleteReply();
+            await interaction.followUp({fetchReply: true, ephemeral: true, content: '## Please verify all the users of this match before verifying this match data!\nWho Needs to be Verified:```' + players + '```'});
+            return;
+        }
 
         let can_submitData = {
             valid: true,
@@ -1000,7 +1028,6 @@ class RankedMatches {
             await this.UpdateMatchSave(match_data);
 
             await buttonInteraction.editReply({content: "Data has been validated!", ephemeral: true});
-            console.log(this.CheckMatchDataReviewed())
         });
 
         let dropdown = null;
