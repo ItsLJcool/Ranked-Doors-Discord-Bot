@@ -12,6 +12,7 @@ const {Selection, SelectionItems} = require("./MessagesUtil/Selection");
 
 const {Button, ButtonItems} = require("./MessagesUtil/Button");
 const {Pages, PagesEmbedData} = require("./MessagesUtil/Pages");
+const EloRankHelper = require("./EloRankHelper");
 
 class RankedMatches {
 
@@ -220,8 +221,9 @@ class RankedMatches {
                             const matchThingy = this.CurrentMatches[i];
                             if (matchThingy.createdUserID != buttonInteraction.member.user.id) continue;
                             if (matchThingy.channel.members.size < 2) {
-                                // buttonInteraction.reply({content: "There isn't enough players to start!", ephemeral: true});
-                                // return;
+                                // Start Match - Player Minimum
+                                buttonInteraction.reply({content: "There isn't enough players to start!", ephemeral: true});
+                                return;
                             }
                             EventsHelper.removeVC_Callback(matchThingy.channel.id);
                             matchThingy.ongoingMatch.MatchInfo.ModeInfo.Players = matchThingy.channel.members.size;
@@ -663,11 +665,35 @@ class RankedMatches {
         
         let review_channel = await this.client.channels.fetch(ServerData.server_info.ReviewChannelID.value);
         const reviewThread = await review_channel.threads.fetch(match_data.ReviewInfo.ThreadID);
+        if (reviewThread.archived) return;
 
         await reviewThread.send(`# This match has been validated by: <@${match_data.ReviewInfo.Reviewer}> | Other Reviewers can change the data, but only if needed.`);
         await reviewThread.setLocked(true);
         await reviewThread.setArchived(true);
+
+        let playerRankingDoors = new Map();
+        let playerEloRound = new Map();
+        for (let i=0; i < match_data.DiscordInfo.PlayerDiscordIDs.length; i++) {
+            const playerID = match_data.DiscordInfo.PlayerDiscordIDs[i];
+            const playerData = PlayersManager.GetPlayerData(playerID);
+            const curMatch = PlayersManager.GetPlayerMatchData(playerData, match_data.MatchID);
+            playerRankingDoors.set(playerID, curMatch.DeathInfo.Door);
+            playerEloRound.set(playerID, playerData.Elo[match_data.ModeInfo.Mode]);
+        }
+
+        const rankMap = EloRankHelper.DoorNumberToRanking(playerRankingDoors);
+        const newThing = EloRankHelper.eloMapTest(playerEloRound, rankMap);
+
+        newThing.forEach((value, key) => {
+            console.log(key, value);
+            const playerData = PlayersManager.GetPlayerData(key);
+            const curMatch = PlayersManager.GetPlayerMatchData(playerData, match_data.MatchID);
+            playerData.Elo[match_data.ModeInfo.Mode] = value;
+            curMatch.Rank = rankMap.get(key);
+            PlayersManager.UpdateStoredData();
+        });
     }
+
 
     static GetMatchData(matchID) {
         try {
@@ -920,8 +946,8 @@ class RankedMatches {
         {name: "Invalidate Match", inline: true, value: `${match_data.Invalid}`, setFunc: (value) => {
             if (value === "true") value = true;
             else value = false;
-            match_data.ReviewInfo.Feedback = value; }},
-        {name: "Accept Match", inline: true, value: `${match_data.Invalid}`, setFunc: (value) => {
+            match_data.Invalid = value; }},
+        {name: "Accept Match", inline: true, value: `${match_data.ReviewInfo.Accepted}`, setFunc: (value) => {
             if (value === "true") value = true;
             else value = false;
             match_data.ReviewInfo.Accepted = value; }},
