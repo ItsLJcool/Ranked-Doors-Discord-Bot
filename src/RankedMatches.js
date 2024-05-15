@@ -306,6 +306,18 @@ class RankedMatches {
                 option.setName("players").setDescription("The Screenshot of all the players in the game.").setRequired(true)
             );
         }, async (interaction) => {
+            const matchInput = interaction.options.getInteger("match-id");
+            let match_data = await this.GetMatchData(matchInput);
+            if (match_data == -1) {
+                interaction.reply({ephemeral: true, content: "This match doesn't exist!"});
+                return;
+            }
+            let review_channel = await this.client.channels.fetch(ServerData.server_info.ReviewChannelID.value);
+            const reviewThread = await review_channel.threads.fetch(match_data.ReviewInfo.ThreadID);
+            if (reviewThread.archived) {
+                interaction.reply({ephemeral: true, content: "This match has been reviewed and Submitted! You can no longer edit the changes of this match submition."});
+                return;
+            }
             const channelMatchmaking = await EventsHelper.client.channels.cache.filter(x => (x.isThread() && x.parentId == ServerData.server_info.MatchmakingChannel.value));
             let inThreadedChannel = false;
             for (const id of channelMatchmaking.keys()) {
@@ -315,13 +327,12 @@ class RankedMatches {
                 }
             }
             if (!inThreadedChannel) {
-                interaction.reply({ content: `You must use this Command in the <#${ServerData.server_info.MatchmakingChannel.value}> threads only!!`, ephemeral: true });
+                interaction.reply({ content: `You must use this command in the <#${ServerData.server_info.MatchmakingChannel.value}> threads only!!`, ephemeral: true });
                 return;
             }
             await interaction.deferReply({content: "Getting the bot ready..."});
 
             const _user = (interaction.member == undefined) ? interaction.user : interaction.member.user;
-            const matchInput = interaction.options.getInteger("match-id");
             const files = [interaction.options.getAttachment("pre-run"), interaction.options.getAttachment("death"), interaction.options.getAttachment("players")];
 
             const player_data = PlayersManager.GetPlayerData(_user.id);
@@ -390,7 +401,6 @@ class RankedMatches {
                     }
                 }
 
-                let match_data = await this.GetMatchData(matchInput);
                 match_data.DiscordInfo.Attachments[buttonInteraction.user.id] = files;
 
                 let review_channel = await this.client.channels.fetch(ServerData.server_info.ReviewChannelID.value);
@@ -653,6 +663,10 @@ class RankedMatches {
         
         let review_channel = await this.client.channels.fetch(ServerData.server_info.ReviewChannelID.value);
         const reviewThread = await review_channel.threads.fetch(match_data.ReviewInfo.ThreadID);
+
+        await reviewThread.send(`# This match has been validated by: <@${match_data.ReviewInfo.Reviewer}> | Other Reviewers can change the data, but only if needed.`);
+        await reviewThread.setLocked(true);
+        await reviewThread.setArchived(true);
     }
 
     static GetMatchData(matchID) {
@@ -700,7 +714,7 @@ class RankedMatches {
             reason: "N / A"
         };
 
-        const checkValueNaN = (value) => {
+        const checkValueNaN = (value, error) => {
             const int_value = parseInt(value);
             if (isNaN(int_value)) {
                 can_submitData.value = false;
@@ -713,7 +727,7 @@ class RankedMatches {
         let pageFields = [
         [
         {name: "Reached Door #", inline: true, value: `${player_matchData.DeathInfo.Door}`, setFunc: (value) => {
-            player_matchData.DeathInfo.Door = value; }},
+            player_matchData.DeathInfo.Door = (value = checkValueNaN(value, "Door # | Please make sure its an Integer! If it uses something like A-1000, it will automatically update once verified"));; }},
 
         {name: "Player Died In Run?", inline: true, value: `${player_matchData.DeathInfo.Died}`, setFunc: (value) => {
             if (value === "true") value = true;
@@ -867,15 +881,16 @@ class RankedMatches {
             let playersToValidate = [];
             let players = "";
             const matchData = await this.GetMatchData(matchInput);
-            if (matchData != -1 && matchData.ValidData) {
+            if (matchData != -1) {
                 const playerIDs = matchData.DiscordInfo.PlayerDiscordIDs;
-    
+                console.log( playerIDs);
                 for (let i=0; i < playerIDs.length; i++) {
                     const playerData = await PlayersManager.GetPlayerData(playerIDs[i]);
                     const playerMatch = await PlayersManager.GetPlayerMatchData(playerData, matchInput);
                     if (playerMatch == -1 || playerData == -1 || playerMatch.ValidData) continue;
                     playersToValidate.push(playerData.DiscordName);
                 }
+                console.log(playersToValidate);
                 players = playersToValidate.join("\n");
             }
             await interaction.deleteReply();
@@ -1026,6 +1041,8 @@ class RankedMatches {
             match_data.ReviewInfo.ValidData = true;
 
             await this.UpdateMatchSave(match_data);
+
+            await this.AllDataVerified(match_data);
 
             await buttonInteraction.editReply({content: "Data has been validated!", ephemeral: true});
         });
