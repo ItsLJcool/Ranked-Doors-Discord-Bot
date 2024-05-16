@@ -41,8 +41,9 @@ class RankedMatches {
         this.client = _client;
         this.ModifiersText = new ModifiersTypes().toSelectionItems();
         this.MatchesToBeReviewed = new Map();
+        
 
-        fs.readdir(this.matchDir, (err, files) => {
+        fs.readdir(this.matchDir, async (err, files) => {
             if (err) {
                 console.error('Error reading folder:', err);
                 return;
@@ -52,7 +53,23 @@ class RankedMatches {
                 const fileStat = fs.statSync(filePath);
                 return fileStat.isFile() && path.extname(filePath).toLowerCase() === '.json';
             });
-            this.ranked_matches = jsonFiles.length;
+            let matchesPlayed = files.filter((file) => {
+                const filePath = path.join(this.matchDir, file);
+                const fileStat = fs.statSync(filePath);
+                return fileStat.isFile() && path.extname(filePath).toLowerCase() === '.match';
+            });
+
+            if (matchesPlayed.length == 0) { // means the file doesn't exist...
+                matchesPlayed = ['0.match'];
+                await fs.writeFile(path.join(this.matchDir, "0.match"), "", async (err) => {
+                    if (err) {
+                        console.error('Error writing to file:', err);
+                        return;
+                    }
+                });
+            }
+            matchesPlayed = parseInt(matchesPlayed[0].substring(0, matchesPlayed[0].lastIndexOf('.')));
+            this.ranked_matches = matchesPlayed;
         });
 
         EventsHelper.addCommand("verify", "(ROLE SPECIFIC) | Verify Match Data", (command) => {
@@ -270,6 +287,7 @@ class RankedMatches {
                     ongoingMatch.Players = [];
                     this.CurrentMatches.push({matchCommandChannel: interaction.channel, createdUserID: interaction.member.user.id, channel: channel, ongoingMatch: ongoingMatch});
                     EventsHelper.addVC_Callback(channel.id, (oldState, newState, type) => {
+                        if (type == "moved" && newState.channelId == oldState.channelId) return;
                         let isInArray = false;
                         for (let i=0; i < ongoingMatch.Players.length; i++) {
                             if (ongoingMatch.Players[i].user.id !== newState.id) continue;
@@ -507,7 +525,12 @@ class RankedMatches {
     static NewMatch() {
         let matchSave = new MatchData();
         matchSave.MatchID = this.ranked_matches;
+        const matchPlayesFilePath = path.join(this.matchDir, `${this.ranked_matches}.match`);
         this.ranked_matches++;
+        const NEWmatchPlayesFilePath = path.join(this.matchDir, `${this.ranked_matches}.match`);
+        fs.rename(matchPlayesFilePath, NEWmatchPlayesFilePath, (err) => {
+            if (err) console.log(err);
+        });
         return matchSave;
     }
 
@@ -661,7 +684,6 @@ class RankedMatches {
         
         let review_channel = await this.client.channels.fetch(ServerData.server_info.ReviewChannelID.value);
         const reviewThread = await review_channel.threads.fetch(match_data.ReviewInfo.ThreadID);
-        console.log(reviewThread);
         if (reviewThread.archived || reviewThread.hasMore == false) return;
 
         await reviewThread.send(`# This match has been validated by: <@${match_data.ReviewInfo.Reviewer}> | Other Reviewers can change the data, but only if needed.`);
@@ -689,10 +711,14 @@ class RankedMatches {
 
         newThing.forEach((value, key) => {
             console.log(key, value);
-            const playerData = PlayersManager.GetPlayerData(key);
-            const curMatch = PlayersManager.GetPlayerMatchData(playerData, match_data.MatchID);
+            let playerData = PlayersManager.GetPlayerData(key);
+            let curMatch = PlayersManager.GetPlayerMatchData(playerData, match_data.MatchID);
             playerData.Elo[match_data.ModeInfo.Mode] = value;
             curMatch.Rank = rankMap.get(key);
+
+            if (curMatch.DeathInfo.Died) playerData.Deaths = parseInt(playerData.Deaths) + 1; // ensuring its 100% an int
+            if (curMatch.GameInfo.KnobsSpent != "N / A" && !isNaN(parseInt(curMatch.GameInfo.KnobsSpent))) playerData.KnobsSpent += parseInt(curMatch.GameInfo.KnobsSpent);
+            if (curMatch.GameInfo.KnobsGained != "N / A" && !isNaN(parseInt(curMatch.GameInfo.KnobsGained))) playerData.KnobsEarned += parseInt(curMatch.GameInfo.KnobsGained);
 
             Object.keys(playerData.Elo).forEach((key) => { curMatch.EloStats.NewElo[key] = playerData.Elo[key]; });
             PlayersManager.UpdateStoredData();
@@ -746,9 +772,10 @@ class RankedMatches {
         };
 
         const checkValueNaN = (value, error) => {
+            if (value == "N / A") return "N / A";
             const int_value = parseInt(value);
             if (isNaN(int_value)) {
-                can_submitData.value = false;
+                can_submitData.valid = false;
                 can_submitData.reason = `Invalid Integer Value in **${error}**`;
             }
             else value = int_value;
@@ -761,10 +788,10 @@ class RankedMatches {
             player_matchData.DeathInfo.Door = (value = checkValueNaN(value, "Door # | Please make sure its an Integer! If it uses something like A-1000, it will automatically update once verified"));; }},
 
         {name: "Player Died In Run?", inline: true, value: `${player_matchData.DeathInfo.Died}`, setFunc: (value) => {
-            if (value === "true") value = true;
-            else if (value === "false") value = false;
+            if (value == "true") value = true;
+            else if (value == "false") value = false;
             else {
-                can_submitData.value = false;
+                can_submitData.valid = false;
                 can_submitData.reason = "Invalid Boolean: **Player Died In Run?**"
             }
             player_matchData.DeathInfo.Died = value; }},
@@ -868,12 +895,18 @@ class RankedMatches {
 
             await dropInteraction.reply({components: [cancelButton.ActionRow], content: `<@${dropInteraction.user.id}>\nReply to this message to set the information with what you reply with`});
             const idxThing = `verifyChat-${dropInteraction.user.id}`;
-            EventsHelper.addChatCommand(idxThing, idxThing, (messageInteraction) => {
+            EventsHelper.addChatCommand(idxThing, idxThing, async (messageInteraction) => {
                 if (dropInteraction.user.id != messageInteraction.author.id) return;
-                const value = messageInteraction.content;
+                const value = await messageInteraction.content;
                 messageInteraction.delete();
-                dropInteraction.deleteReply();
-                EventsHelper.removeChatCommand(idxThing);
+                try {
+                    dropInteraction.deleteReply();
+                    EventsHelper.removeChatCommand(idxThing);
+                } catch(e) {
+                    console.error(e);
+                    EventsHelper.removeChatCommand(idxThing);
+                    return dropInteraction.followUp("Sorry! Looks like an error occured.");
+                }
                 
                 pageFields[idxs[0]][idxs[1]].value = value;
                 
@@ -914,18 +947,16 @@ class RankedMatches {
             const matchData = await this.GetMatchData(matchInput);
             if (matchData != -1) {
                 const playerIDs = matchData.DiscordInfo.PlayerDiscordIDs;
-                console.log( playerIDs);
                 for (let i=0; i < playerIDs.length; i++) {
                     const playerData = await PlayersManager.GetPlayerData(playerIDs[i]);
                     const playerMatch = await PlayersManager.GetPlayerMatchData(playerData, matchInput);
                     if (playerMatch == -1 || playerData == -1 || playerMatch.ValidData) continue;
                     playersToValidate.push(playerData.DiscordName);
                 }
-                console.log(playersToValidate);
-                players = playersToValidate.join("\n");
+                players = playersToValidate.join(", ");
             }
             await interaction.deleteReply();
-            await interaction.followUp({fetchReply: true, ephemeral: true, content: '## Please verify all the users of this match before verifying this match data!\nWho Needs to be Verified:```' + players + '```'});
+            await interaction.followUp({fetchReply: true, ephemeral: true, content: '## Please verify all the users of this match before verifying this match data!\nWho Needs to be Verified:\n```' + players + '```'});
             return;
         }
 
@@ -1111,12 +1142,18 @@ class RankedMatches {
 
             await dropInteraction.reply({components: [cancelButton.ActionRow], content: `<@${dropInteraction.user.id}>\nReply to this message to set the information with what you reply with`});
             const idxThing = `verifyChat-${dropInteraction.user.id}`;
-            EventsHelper.addChatCommand(idxThing, idxThing, (messageInteraction) => {
+            EventsHelper.addChatCommand(idxThing, idxThing, async (messageInteraction) => {
                 if (dropInteraction.user.id != messageInteraction.author.id) return;
-                const value = messageInteraction.content;
+                const value = await messageInteraction.content;
                 messageInteraction.delete();
-                dropInteraction.deleteReply();
-                EventsHelper.removeChatCommand(idxThing);
+                try {
+                    dropInteraction.deleteReply();
+                    EventsHelper.removeChatCommand(idxThing);
+                } catch(e) {
+                    console.error(e);
+                    EventsHelper.removeChatCommand(idxThing);
+                    return dropInteraction.followUp("Sorry! Looks like an error occured.");
+                }
                 
                 pageFields[idxs[0]][idxs[1]].value = value;
                 
