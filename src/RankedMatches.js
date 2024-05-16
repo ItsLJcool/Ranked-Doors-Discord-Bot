@@ -665,7 +665,7 @@ class RankedMatches {
         
         let review_channel = await this.client.channels.fetch(ServerData.server_info.ReviewChannelID.value);
         const reviewThread = await review_channel.threads.fetch(match_data.ReviewInfo.ThreadID);
-        if (reviewThread.archived) return;
+        // if (reviewThread.archived) return;
 
         await reviewThread.send(`# This match has been validated by: <@${match_data.ReviewInfo.Reviewer}> | Other Reviewers can change the data, but only if needed.`);
         await reviewThread.setLocked(true);
@@ -679,6 +679,12 @@ class RankedMatches {
             const curMatch = PlayersManager.GetPlayerMatchData(playerData, match_data.MatchID);
             playerRankingDoors.set(playerID, curMatch.DeathInfo.Door);
             playerEloRound.set(playerID, playerData.Elo[match_data.ModeInfo.Mode]);
+            curMatch.EloStats = {};
+            curMatch.EloStats.PrevElo = {};
+            curMatch.EloStats.NewElo = {};
+
+            Object.keys(playerData.Elo).forEach((key) => { curMatch.EloStats.PrevElo[key] = playerData.Elo[key]; });
+            PlayersManager.UpdateStoredData();
         }
 
         const rankMap = EloRankHelper.DoorNumberToRanking(playerRankingDoors);
@@ -690,6 +696,8 @@ class RankedMatches {
             const curMatch = PlayersManager.GetPlayerMatchData(playerData, match_data.MatchID);
             playerData.Elo[match_data.ModeInfo.Mode] = value;
             curMatch.Rank = rankMap.get(key);
+
+            Object.keys(playerData.Elo).forEach((key) => { curMatch.EloStats.NewElo[key] = playerData.Elo[key]; });
             PlayersManager.UpdateStoredData();
         });
     }
@@ -1178,6 +1186,11 @@ class PlayerMatchData {
     ValidData = false;
     DeathInfo = new DeathData();
     GameInfo = new GameData();
+
+    EloStats = {
+        PrevElo: {},
+        NewElo: {}
+    };
 
     MatchID = -1;
     Rank = -1; // Placement Data of the Player's Match.
