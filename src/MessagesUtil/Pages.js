@@ -16,7 +16,7 @@ class Pages {
         const _user = (prevInteraction.member == undefined) ? prevInteraction.user.id : prevInteraction.member.user.id;
         for (let i=0; i < pageEmbed_data.length; i++) {
             const data = pageEmbed_data[i];
-            
+
             try {
                 const embed = new EmbedBuilder().setAuthor(data.Author).setTitle(data.Title).setDescription(data.Description).setColor(data.Color);
                 if (data.Fields != undefined) embed.addFields(data.Fields);
@@ -24,7 +24,7 @@ class Pages {
                 if (data.Footer != undefined) embed.setFooter(data.Footer)
                 this.pages_embeds.push(embed);
             } catch(e) {
-                console.error(e);
+                console.error(`Error in Pages.js: ${e}`);
             }
         }
 

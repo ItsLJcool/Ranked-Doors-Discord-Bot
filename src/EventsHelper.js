@@ -13,6 +13,11 @@ class EventsHelper {
     static modalCallbacks;
 
     static voiceChannelCallbacks;
+    
+    static AddChoices(option, arry) {
+        for (let i=0; i < arry.length; i++) option.addChoices(arry[i]);
+    }
+    
     static init(_client) {
         this.client = _client;
         this.commands = new Map();

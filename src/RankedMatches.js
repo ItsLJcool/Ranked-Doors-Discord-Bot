@@ -37,10 +37,6 @@ class RankedMatches {
 
     static CurrentMatches = [];
 
-    static AddChoices(option, arry) {
-        for (let i=0; i < arry.length; i++) option.addChoices(arry[i]);
-    }
-
     static init(_client) {
         this.client = _client;
         this.ModifiersText = new ModifiersTypes().toSelectionItems();
@@ -95,19 +91,19 @@ class RankedMatches {
                 option.setName("mode")
                 .setDescription("Display to others what mode this will be in")
                 .setRequired((this.PossibleRankedModes.length > 1));
-                this.AddChoices(option, this.PossibleRankedModes);
+                EventsHelper.AddChoices(option, this.PossibleRankedModes);
                 return option;
             }).addStringOption(option => {
                 option.setName("floor")
                 .setDescription("What floor you want to play ranked on")
                 .setRequired((this.PossibleRankedFloors.length > 1));
-                this.AddChoices(option, this.PossibleRankedFloors);
+                EventsHelper.AddChoices(option, this.PossibleRankedFloors);
                 return option;
             }).addStringOption(option => {
                 option.setName("run")
                 .setDescription("What Run Type it is")
                 .setRequired((this.PossibleRankedRunTypes.length > 1));
-                this.AddChoices(option, this.PossibleRankedRunTypes);
+                EventsHelper.AddChoices(option, this.PossibleRankedRunTypes);
                 return option;
             });
         },
@@ -665,7 +661,8 @@ class RankedMatches {
         
         let review_channel = await this.client.channels.fetch(ServerData.server_info.ReviewChannelID.value);
         const reviewThread = await review_channel.threads.fetch(match_data.ReviewInfo.ThreadID);
-        // if (reviewThread.archived) return;
+        console.log(reviewThread);
+        if (reviewThread.archived || reviewThread.hasMore == false) return;
 
         await reviewThread.send(`# This match has been validated by: <@${match_data.ReviewInfo.Reviewer}> | Other Reviewers can change the data, but only if needed.`);
         await reviewThread.setLocked(true);

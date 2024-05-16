@@ -15,6 +15,8 @@ const {Selection, SelectionItems} = require("./MessagesUtil/Selection");
 const {ModalUtil, TextInputItems} = require("./MessagesUtil/ModalUtil");
 const {Pages, PagesEmbedData} = require("./MessagesUtil/Pages");
 
+const UserCommands = require("./UserCommands");
+
 const {ServerData, ServerSaveData} = require("./ServerData");
 
 const EventsHelper = require("./EventsHelper");
@@ -36,6 +38,8 @@ client.on(Events.ClientReady, async (x) => {
     RankedMatches.init(client);
 
     ServerData.init();
+    
+    UserCommands.init(client);
 
     console.log(`${x.user.tag} is ready!`);
     client.user.setActivity("Trying to understand how 2024 Discord bots work lol");
@@ -56,7 +60,7 @@ client.on(Events.ClientReady, async (x) => {
           name: "Ranked Doors - Discord Server",
         })
         .setTitle(`${PlayersManager.PlayerName(player)} - Signed up!`)
-        .setDescription(`You have been signed up!\nPlease read the rules before playing Ranked Matches!\n\nYou can always do /{commandName} to check your and other's stats!\nHave fun!`)
+        .setDescription(`You have been signed up!\nPlease read the rules before playing Ranked Matches!\n\nYou can always do /stats to check your and other's stats!\nHave fun!`)
         .addFields(
           {
             name: "Ranked Doors - Account Name",
