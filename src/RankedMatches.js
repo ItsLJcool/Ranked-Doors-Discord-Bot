@@ -302,7 +302,7 @@ class RankedMatches {
 
                         MatchMake_Embed.data.fields[0].name = `People In Queue (${ongoingMatch.Players.length} / 12)`;
                         MatchMake_Embed.data.fields[0].value = fieldString;
-                        message.edit({embeds: [MatchMake_Embed]});
+                        message.edit({embeds: [MatchMake_Embed], components: message.components});
                     });
                 })
                 .catch(console.error);
