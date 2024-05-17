@@ -12,7 +12,7 @@ class EloRankHelper {
                 let w = 1/(10 ** ((playerElos[j] - playerElos[i])/400) + 1);
                 if (playerRanks[i] < playerRanks[j]) score = 1;
                 else if (playerRanks[i] === playerRanks[j]) score = 0.5;
-                nr += this.kFactor * (score - w);
+                nr += (this.kFactor/(playerElosArray.length)-1) * (score - w);
             }
             newRate.push(Math.round(playerElos[i] + nr));
         }
@@ -38,7 +38,7 @@ class EloRankHelper {
                 let w = 1 / (10 ** ((playerElosArray[j] - playerElosArray[i]) / 400) + 1);
                 if (playerRanksArray[i] < playerRanksArray[j]) score = 1;
                 else if (playerRanksArray[i] === playerRanksArray[j]) score = 0.5;
-                nr += this.kFactor * (score - w);
+                nr += (this.kFactor/(playerElosArray.length)-1) * (score - w);
             }
             newRate.push(Math.round(playerElosArray[i] + nr));
         }
