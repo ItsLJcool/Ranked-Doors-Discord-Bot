@@ -220,7 +220,8 @@ class RankedMatches {
             const message = await interaction.channel.send(sendThing);
             const button = new Button(interaction.member.user.id, [
                 new ButtonItems("start match", "Start Match (HOST)", ButtonStyle.Primary, null, null, false),
-                new ButtonItems("end match", "End Match (HOST)", ButtonStyle.Danger, null, null, true)
+                new ButtonItems("end match", "End Match (HOST)", ButtonStyle.Danger, null, null, true),
+                new ButtonItems("cancel match", "Cancel Match (HOST)", ButtonStyle.Danger, null, null, true)
             ], async (id, buttonInteraction) => {
                 const _userId = id.split("_");
                 if (_userId[1] != buttonInteraction.member.user.id) {
@@ -273,6 +274,9 @@ class RankedMatches {
                             message.delete();
                             return;
                         }
+                        break;
+                    case "cancel match":
+                        console.log("cancel match");
                         break;
                 }
                 buttonInteraction.reply({content: "Uh Oh, something bad happened... This got past a switch case...", ephemeral: true});
@@ -467,7 +471,6 @@ class RankedMatches {
         }
 
         const fileSubmitCMDname = "/submit";
-        const forgorCMDname = "/placeholder command !!";
 
         let ongoingMatch = matchThingy.ongoingMatch;
         const matchID = ongoingMatch.MatchInfo.MatchID;
@@ -500,7 +503,7 @@ class RankedMatches {
           name: `Ranked Doors - Match #${matchID}`,
         })
         .setTitle(`Submit Screenshots of Match #${matchID}`)
-        .setDescription("Nice Game!\n\nTo *calculate* your new **Elo Rating**, please submit your screenshots you took in-game\nUse the `" + fileSubmitCMDname + "` to submit your files.\n\nIf you forgot to take a screenshot, or just didn't take any. Please use `" + forgorCMDname + "` to let the moderators know you don't have the screenshots.\n\n**It is possible to have a valid match when doing this.**\nIt will take a bit longer to verify but please make sure you do save your screenshots.\n\n**Don't know how to submit a screenshot?**\nIn Roblox, using `PrintScreen` will take a screenshot of roblox automatically, and you can view them at any time in `.png` format!")
+        .setDescription("Nice Game!\n\nTo *calculate* your new **Elo Rating**, please submit your screenshots you took in-game\nUse the `" + fileSubmitCMDname + "` to submit your files.\n\nIf you forgot to take a screenshot, or just didn't take any. Please use let the moderators know you don't have the screenshots.\n\n**It is possible to have a valid match when doing this.**\nIt will take a bit longer to verify but please make sure you do save your screenshots.\n\n**Don't know how to submit a screenshot?**\nIn Roblox, using `PrintScreen` will take a screenshot of roblox automatically, and you can view them at any time in your file system.\n\nWhats a Match ID? Well when you see something like 'Match #12', the Number will the the 'ID' Of the match.")
         .addFields(fields)
         .setColor("#00b0f4")
         .setFooter(footer)
@@ -857,7 +860,7 @@ class RankedMatches {
             player_matchData.DeathInfo.ValidData = true;
             player_matchData.GameInfo.ValidData = true;
 
-            await PlayersManager.UpdateStoredData();
+            PlayersManager.UpdateStoredData();
 
             await buttonInteraction.editReply({content: "Data has been validated!", ephemeral: true});
         });

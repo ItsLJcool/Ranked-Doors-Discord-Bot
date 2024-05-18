@@ -19,7 +19,7 @@ class Selection {
             _options.push(select_menu);
         }
 
-        EventsHelper.addDropdownCallback(id, callback);
+        EventsHelper.addDropdownCallback(id + `_${userID}`, callback);
 
         this.dropdown = new StringSelectMenuBuilder()
 			.setCustomId(id + `_${userID}`)

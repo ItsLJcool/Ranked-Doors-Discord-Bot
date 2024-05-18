@@ -27,7 +27,7 @@ class EloRankHelper {
 
         // Step 2: Extract player ranks
         let playerRanksArray = playerIDs.map(id => playerRanks.get(id));
-        console.log(playerElosArray, playerRanksArray);
+        console.log(playerIDs, playerElosArray, playerRanksArray);
 
         let newRate = [];
         for (let i = 0; i < playerElosArray.length; i++) {

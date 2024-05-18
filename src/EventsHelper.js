@@ -46,7 +46,7 @@ class EventsHelper {
 
             if (interaction.isStringSelectMenu()) {
                 this.dropdownCallbacks.forEach((func, value) => {
-                    if ((value + `_${interaction.member.user.id}`) !== interaction.customId) return;
+                    if (value !== interaction.customId) return;
                     func(interaction.customId, interaction);
                 });
                 return;
