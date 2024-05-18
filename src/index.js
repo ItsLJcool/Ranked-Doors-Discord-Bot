@@ -48,7 +48,8 @@ client.on(Events.ClientReady, async (x) => {
     EventsHelper.addCommand("register", "Register an account to Ranked Doors Bot", (command) => {
     },
     async (interaction) => {
-        const discord = interaction.member;
+        if (PlayersManager.GetPlayerData(interaction.user.id) != -1) { return interaction.reply({ephemeral: true, content: "You already have an account!"}); }
+        const discord = interaction;
         const returnType = PlayersManager.SetUpPlayer(discord);
         if (!returnType[0]) {
             await interaction.reply({content: "Uh Oh! Looks like your already signed up!", ephemeral: true});
@@ -85,7 +86,7 @@ client.on(Events.ClientReady, async (x) => {
     EventsHelper.addCommand("buttontest", "Testing out Button Util", null,
     async (interaction) => {
         
-        const button = new Button(interaction.member.user.id, [
+        const button = new Button(interaction.user.id, [
             new ButtonItems("testid", "Label String", ButtonStyle.Primary, null, null, false)
         ], (id, interaction) => {
             console.log(id);
